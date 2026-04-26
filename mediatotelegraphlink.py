@@ -13,41 +13,30 @@ app = Client(
 
 @app.on_message(filters.command("start"))
 async def start(client, message):
-    await message.reply("✅ 机器人已就绪\n**使用方法**：在讨论组线程里**回复任意一条消息**，然后发送 /telegraph")
+    await message.reply("✅ 版本8 已启动\n**使用方法**：在讨论组线程里**回复任意一条消息**，然后发送 /telegraph")
 
 @app.on_message(filters.command("telegraph"))
 async def make_telegraph(client, message: Message):
-    # 使用回复的消息作为起点
     if not message.reply_to_message:
         return await message.reply("❌ 请**回复**线程里的任意一条消息，然后发送 /telegraph")
 
-    thread_id = getattr(message.reply_to_message, 'message_thread_id', None) or getattr(message, 'message_thread_id', 1)
-
-    await message.reply("🔄 正在收集该线程的媒体...")
+    await message.reply("🔄 正在收集媒体...")
 
     try:
         messages = []
-
-        # 从回复的消息开始向上收集（Bot 可用的方式）
         current = message.reply_to_message
         messages.append(current)
 
-        # 尝试收集后续消息（有限次数）
+        # 向上收集回复链（Bot 能可靠获取的部分）
         for _ in range(300):
             if not current.reply_to_message:
                 break
             current = await client.get_messages(message.chat.id, current.reply_to_message.id)
-            if current.media:
+            if current.media or current.text:
                 messages.append(current)
 
-        # 再尝试收集前面的一些消息
-        async for msg in client.get_chat_history(message.chat.id, limit=100, offset_id=message.reply_to_message.id):
-            if getattr(msg, 'message_thread_id', None) == thread_id and msg.media:
-                messages.append(msg)
-            if len(messages) > 300:
-                break
-
-        messages = list(dict.fromkeys(messages))  # 去重
+        # 去重并排序
+        messages = list({m.id: m for m in messages}.values())
         messages.sort(key=lambda m: m.date)
 
         title = "COSER 写真"
@@ -56,11 +45,12 @@ async def make_telegraph(client, message: Message):
                 title = m.text.split('\n')[0][:100]
                 break
 
-        await message.reply(f"✅ 找到 {len(messages)} 条媒体，开始上传...")
+        await message.reply(f"✅ 找到 {len(messages)} 条内容，开始上传...")
 
         urls = []
         for m in messages:
-            if not m.media: continue
+            if not m.media: 
+                continue
             try:
                 file = await m.download(in_memory=True)
                 file_bytes = file.getvalue() if hasattr(file, 'getvalue') else file.read() if hasattr(file, 'read') else file
@@ -87,5 +77,5 @@ async def make_telegraph(client, message: Message):
     except Exception as e:
         await message.reply(f"❌ 出错: {str(e)}")
 
-print("✅ 最终实用版已启动")
+print("✅ 版本8 已启动")
 app.run()
