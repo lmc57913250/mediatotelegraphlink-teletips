@@ -1,7 +1,6 @@
 from pyrogram import Client, filters
 from pyrogram.types import Message
 import os
-import time
 
 app = Client(
     "COSERBot",
@@ -10,55 +9,53 @@ app = Client(
     bot_token=os.environ["BOT_TOKEN"]
 )
 
-# 存储每组的第一张消息
-group_first_messages = []
-last_message_time = 0
+# 存储当前正在处理的封面和媒体
+current_cover = None
+collected_media = []
 
 @app.on_message(filters.command("start"))
 async def start(client, message):
-    await message.reply("✅ **版本24** 已启动\n发完一组图片后，输入 /telegraph 我会提取**每组第一张**的链接")
+    await message.reply("✅ **版本26** 已启动\n**使用方法**：\n1. 在频道发一张封面图\n2. 在讨论组线程发图片\n3. 发完后输入 /telegraph")
 
+# 检测频道主帖（封面）
+@app.on_message(filters.chat_type.channel & filters.media)
+async def detect_cover(client, message: Message):
+    global current_cover, collected_media
+    current_cover = message
+    collected_media = []  # 新封面开始新的一组
+    await message.reply("📌 已检测到封面图，开始新的一组收集")
+
+# 收集讨论组线程里的媒体
 @app.on_message(filters.media)
-async def collect_first(client, message: Message):
-    global last_message_time
-    
-    now = time.time()
-    
-    # 超过10秒视为新的一组
-    if now - last_message_time > 10:
-        # 保存上一组的第一张（如果有）
-        if 'current_first' in globals() and current_first is not None:
-            group_first_messages.append(current_first)
-    
-    # 更新当前组的第一张
-    global current_first
-    current_first = message
-    
-    last_message_time = now
+async def collect_media(client, message: Message):
+    global collected_media
+    if message.chat.type == "supergroup":   # 讨论组
+        collected_media.append(message)
 
 @app.on_message(filters.command("telegraph"))
-async def send_first_links(client, message: Message):
-    global group_first_messages, current_first
+async def generate_links(client, message: Message):
+    global current_cover, collected_media
     
-    # 把最后一组也加上
-    if 'current_first' in globals() and current_first is not None:
-        group_first_messages.append(current_first)
-    
-    if not group_first_messages:
-        return await message.reply("目前没有收集到图片")
+    if not current_cover:
+        return await message.reply("❌ 请先在频道发一张封面图")
+
+    all_media = [current_cover] + collected_media
 
     links = []
-    for i, msg in enumerate(group_first_messages):
-        link = f"https://t.me/c/{str(msg.chat.id)[4:]}/{msg.id}"
-        links.append(f"第 {i+1} 组 → {link}")
+    for i, msg in enumerate(all_media):
+        if msg.photo or msg.video or msg.document:
+            link = f"https://t.me/c/{str(msg.chat.id)[4:]}/{msg.id}"
+            links.append(f"第 {i+1} 张 → {link}")
 
-    text = "📸 **提取完成**（每组只取第一张）\n\n" + "\n".join(links)
+    if not links:
+        return await message.reply("未找到媒体")
+
+    text = f"📸 **提取完成**（共 {len(links)} 张，每条取第一张）\n\n" + "\n".join(links)
     await message.reply(text)
     
-    # 清空，准备下次使用
-    group_first_messages = []
-    if 'current_first' in globals():
-        current_first = None
+    # 清空，准备下一组
+    current_cover = None
+    collected_media = []
 
-print("✅ 版本24 已启动")
+print("✅ 版本26 已启动 - 封面 + 讨论组模式")
 app.run()
