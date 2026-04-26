@@ -9,37 +9,41 @@ app = Client(
     bot_token=os.environ["BOT_TOKEN"]
 )
 
-current_cover = None
-collected_firsts = []   # 存储每组的第一张（包括封面）
+current_cover = None   # 记录讨论组里的封面消息
+collected_media = []
 
 @app.on_message(filters.command("start"))
 async def start(client, message):
-    await message.reply("✅ **版本33** 已启动\n1. 频道发封面图\n2. 讨论组发图片（可分多条）\n3. 发完后输入 /telegraph")
+    await message.reply("✅ **版本34** 已启动\n1. 在频道发封面图\n2. 在讨论组线程发图片\n3. 发完后输入 /telegraph")
 
-# 频道发图 → 封面
-@app.on_message(filters.channel & filters.media)
-async def set_cover(client, message: Message):
-    global current_cover, collected_firsts
-    current_cover = message
-    collected_firsts = [message]   # 封面作为第一组第一张
-    # 默默记录，不回复
+# 检测讨论组里出现的封面（包括频道转存的消息）
+@app.on_message(filters.chat_type.supergroup & filters.media)
+async def detect_cover_in_group(client, message: Message):
+    global current_cover, collected_media
+    # 如果是新封面（假设第一条媒体是封面）
+    if current_cover is None:
+        current_cover = message
+        collected_media = []
+        # 默默记录，不回复
 
-# 讨论组发媒体 → 每条消息的第一张记录下来
-@app.on_message(filters.media)
-async def collect_first(client, message: Message):
-    global collected_firsts
-    if current_cover and message.chat.type in ["supergroup", "group"]:
-        collected_firsts.append(message)   # 每条消息的第一张
+# 收集后续媒体
+@app.on_message(filters.chat_type.supergroup & filters.media)
+async def collect_media(client, message: Message):
+    global collected_media
+    if current_cover and message.id != current_cover.id:
+        collected_media.append(message)
 
 @app.on_message(filters.command("telegraph"))
 async def generate(client, message: Message):
-    global current_cover, collected_firsts
+    global current_cover, collected_media
 
     if not current_cover:
         return await message.reply("❌ 请先在频道发一张封面图")
 
+    all_media = [current_cover] + collected_media
+
     links = []
-    for i, msg in enumerate(collected_firsts):
+    for i, msg in enumerate(all_media):
         if msg.photo or msg.video or msg.document:
             link = f"https://t.me/c/{str(msg.chat.id)[4:]}/{msg.id}"
             links.append(f"第 {i+1} 张 → {link}")
@@ -52,7 +56,7 @@ async def generate(client, message: Message):
 
     # 清空准备下一组
     current_cover = None
-    collected_firsts = []
+    collected_media = []
 
-print("✅ 版本33 已启动")
+print("✅ 版本34 已启动")
 app.run()
