@@ -1,6 +1,7 @@
 from pyrogram import Client, filters
 from pyrogram.types import Message
 import os
+import time
 
 app = Client(
     "COSERBot",
@@ -9,41 +10,54 @@ app = Client(
     bot_token=os.environ["BOT_TOKEN"]
 )
 
-collected_media = []   # 临时存储最近收到的媒体消息
+collected_groups = []   # 存储每组的第一张消息
+last_time = 0
 
 @app.on_message(filters.command("start"))
 async def start(client, message):
-    await message.reply("✅ **版本22** 已启动\n发完图片后，输入 /telegraph 我会提取**每条消息的第一张链接**")
+    await message.reply("✅ **版本23** 已启动\n发完一组图片后，输入 /telegraph 我会只提取**每组的第一张**链接")
 
 @app.on_message(filters.media)
-async def collect_media(client, message: Message):
-    global collected_media
-    collected_media.append(message)
-    # 只保留最近100条，防止内存占用
-    if len(collected_media) > 100:
-        collected_media = collected_media[-100:]
+async def collect_first_per_group(client, message: Message):
+    global last_time
+    
+    now = time.time()
+    
+    # 如果超过 10 秒没有新消息，认为是新的一组
+    if now - last_time > 10:
+        # 保存上一组的第一张
+        if 'current_first' in globals() and current_first:
+            collected_groups.append(current_first)
+    
+    # 更新当前组的第一张
+    if 'current_first' not in globals() or now - last_time > 10:
+        global current_first
+        current_first = message
+    
+    last_time = now
 
 @app.on_message(filters.command("telegraph"))
-async def extract_first_of_each(client, message: Message):
-    global collected_media
-    if not collected_media:
-        return await message.reply("目前没有收集到媒体，请先发图片")
+async def send_links(client, message: Message):
+    global collected_groups, current_first
+    
+    if 'current_first' in globals() and current_first:
+        collected_groups.append(current_first)
+    
+    if not collected_groups:
+        return await message.reply("还没有收集到图片")
 
-    first_links = []
-    for msg in collected_media:
-        if msg.photo or msg.video or msg.document:
-            link = f"https://t.me/c/{str(msg.chat.id)[4:]}/{msg.id}"
-            first_links.append(link)
+    links = []
+    for i, msg in enumerate(collected_groups):
+        link = f"https://t.me/c/{str(msg.chat.id)[4:]}/{msg.id}"
+        links.append(f"第 {i+1} 组 → {link}")
 
-    if not first_links:
-        return await message.reply("未找到媒体")
-
-    text = "📸 **提取完成**（每条消息只取第一张）\n\n" + "\n".join([f"第{i+1}条 → {link}" for i, link in enumerate(first_links)])
-
+    text = "📸 **提取完成**（每组只取第一张）\n\n" + "\n".join(links)
     await message.reply(text)
     
-    # 清空缓存，准备下一次
-    collected_media = []
+    # 清空，准备下一次
+    collected_groups = []
+    if 'current_first' in globals():
+        current_first = None
 
-print("✅ 版本22 已启动 - 只提取每组第一张")
+print("✅ 版本23 已启动 - 按组提取第一张")
 app.run()
