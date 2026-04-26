@@ -13,30 +13,28 @@ app = Client(
 
 @app.on_message(filters.command("start"))
 async def start(client, message):
-    await message.reply("✅ 版本8 已启动\n**使用方法**：在讨论组线程里**回复任意一条消息**，然后发送 /telegraph")
+    await message.reply("✅ 版本9 已启动\n直接在讨论组线程里发 /telegraph 即可（不用回复）")
 
 @app.on_message(filters.command("telegraph"))
 async def make_telegraph(client, message: Message):
-    if not message.reply_to_message:
-        return await message.reply("❌ 请**回复**线程里的任意一条消息，然后发送 /telegraph")
+    # 优先使用当前消息的 thread_id
+    thread_id = getattr(message, 'message_thread_id', None)
+    if not thread_id and message.reply_to_message:
+        thread_id = getattr(message.reply_to_message, 'message_thread_id', None)
+    if not thread_id:
+        thread_id = 1  # 保底
 
-    await message.reply("🔄 正在收集媒体...")
+    await message.reply(f"🔄 版本9 - 检测到线程(ID: {thread_id})，正在收集媒体...")
 
     try:
         messages = []
-        current = message.reply_to_message
-        messages.append(current)
+        async for msg in client.get_chat_history(message.chat.id, limit=350):
+            if getattr(msg, 'message_thread_id', None) == thread_id:
+                messages.append(msg)
 
-        # 向上收集回复链（Bot 能可靠获取的部分）
-        for _ in range(300):
-            if not current.reply_to_message:
-                break
-            current = await client.get_messages(message.chat.id, current.reply_to_message.id)
-            if current.media or current.text:
-                messages.append(current)
+        if len(messages) == 0:
+            return await message.reply("未找到任何消息")
 
-        # 去重并排序
-        messages = list({m.id: m for m in messages}.values())
         messages.sort(key=lambda m: m.date)
 
         title = "COSER 写真"
@@ -45,7 +43,7 @@ async def make_telegraph(client, message: Message):
                 title = m.text.split('\n')[0][:100]
                 break
 
-        await message.reply(f"✅ 找到 {len(messages)} 条内容，开始上传...")
+        await message.reply(f"✅ 找到 {len(messages)} 条媒体，开始上传...")
 
         urls = []
         for m in messages:
@@ -77,5 +75,5 @@ async def make_telegraph(client, message: Message):
     except Exception as e:
         await message.reply(f"❌ 出错: {str(e)}")
 
-print("✅ 版本8 已启动")
+print("✅ 版本9 已启动")
 app.run()
