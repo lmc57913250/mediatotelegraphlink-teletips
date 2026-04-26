@@ -11,33 +11,32 @@ app = Client(
     bot_token=os.environ["BOT_TOKEN"]
 )
 
-@app.on_message(filters.command("start"))
-async def start(client, message):
-    await message.reply("✅ 机器人已就绪\n在**讨论组线程**里发 /telegraph 打包")
+# 任何消息都回复（用于调试）
+@app.on_message()
+async def debug_all(client, message: Message):
+    print(f"[DEBUG] 收到消息 | Chat:{message.chat.id} | Thread:{getattr(message, 'message_thread_id', 'None')} | Text:{message.text}")
+    if message.text and message.text.strip().lower() == "/start":
+        await message.reply("✅ 调试版机器人已在线！\n直接在讨论组线程发 /telegraph 测试")
 
+# 主功能
 @app.on_message(filters.command("telegraph"))
 async def make_telegraph(client, message: Message):
-    # 多种方式获取 thread_id
+    print(f"[DEBUG] /telegraph 命令被触发！")
+    
     thread_id = getattr(message, 'message_thread_id', None)
     if not thread_id and message.reply_to_message:
         thread_id = getattr(message.reply_to_message, 'message_thread_id', None)
-    
-    # 如果还是拿不到，尝试从聊天类型判断（讨论组通常是 supergroup）
-    if not thread_id and message.chat.type in ["supergroup", "channel"]:
-        thread_id = getattr(message, 'message_thread_id', 1)  # 保底
-
-    print(f"[DEBUG] thread_id = {thread_id} | chat_id = {message.chat.id}")
 
     if not thread_id:
-        return await message.reply("❌ 请在**频道帖子的讨论组线程**里使用 /telegraph")
+        return await message.reply("❌ 请在**频道讨论组的线程**里使用 /telegraph")
 
-    await message.reply("🔄 正在收集媒体，请稍等...")
+    await message.reply("🔄 正在收集媒体...")
 
     try:
         topic = await client.get_discussion_message(message.chat.id, thread_id)
         messages = [topic]
 
-        async for msg in client.get_chat_history(message.chat.id, limit=400, offset_id=topic.id):
+        async for msg in client.get_chat_history(message.chat.id, limit=300, offset_id=topic.id):
             if getattr(msg, 'message_thread_id', None) == thread_id and msg.media:
                 messages.append(msg)
 
@@ -80,5 +79,5 @@ async def make_telegraph(client, message: Message):
     except Exception as e:
         await message.reply(f"❌ 出错: {str(e)}")
 
-print("✅ COSER 机器人已启动")
+print("✅ 极简调试版已启动")
 app.run()
