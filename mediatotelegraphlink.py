@@ -13,22 +13,20 @@ app = Client(
 
 @app.on_message(filters.command("start"))
 async def start(client, message):
-    await message.reply("✅ 机器人已就绪\n在讨论组线程里直接发 /telegraph")
+    await message.reply("✅ 机器人已就绪\n直接在讨论组线程发 /telegraph 打包")
 
 @app.on_message(filters.command("telegraph"))
 async def make_telegraph(client, message: Message):
-    # 多种方式强力获取 thread_id
+    # 强力获取 thread_id
     thread_id = getattr(message, 'message_thread_id', None)
     if not thread_id and message.reply_to_message:
         thread_id = getattr(message.reply_to_message, 'message_thread_id', None)
-    if not thread_id and message.chat.type in ["supergroup", "channel"]:
-        # 保底方案：如果在 supergroup 就尝试用当前聊天作为线程
-        thread_id = 1
-
+    
+    # 如果还是拿不到，强制使用当前聊天（适用于大多数讨论组）
     if not thread_id:
-        return await message.reply("❌ 请在**频道帖子的讨论组线程**里使用 /telegraph")
+        thread_id = 1   # 保底值，很多讨论组默认是1
 
-    await message.reply("🔄 正在收集该线程的所有媒体...")
+    await message.reply(f"🔄 检测到线程 (ID: {thread_id})，正在收集媒体...")
 
     try:
         topic = await client.get_discussion_message(message.chat.id, thread_id)
@@ -77,5 +75,5 @@ async def make_telegraph(client, message: Message):
     except Exception as e:
         await message.reply(f"❌ 出错: {str(e)}")
 
-print("✅ COSER 打包机器人已启动")
+print("✅ 最终版已启动")
 app.run()
