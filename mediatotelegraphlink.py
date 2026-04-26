@@ -1,8 +1,6 @@
 from pyrogram import Client, filters
 from pyrogram.types import Message
-from telegraph import Telegraph
 import os
-import asyncio
 
 app = Client(
     "COSERBot",
@@ -13,59 +11,32 @@ app = Client(
 
 @app.on_message(filters.command("start"))
 async def start(client, message):
-    await message.reply("✅ **版本20** 已启动\n**使用方法**：直接在私聊或群里发图片/视频，然后发送 /telegraph")
+    await message.reply("✅ **版本21** 已启动\n直接在讨论组里发图片/视频，我会给你 Telegram 链接")
 
-@app.on_message(filters.command("telegraph"))
-async def make_telegraph(client, message: Message):
-    # 收集最近回复或连续的消息中的媒体
-    messages = []
-    if message.reply_to_message:
-        messages.append(message.reply_to_message)
-    
-    # 如果没有回复，就收集最近几条
-    if not messages:
-        async for msg in client.get_chat_history(message.chat.id, limit=30):
-            if msg.media:
-                messages.append(msg)
-            if len(messages) >= 30:
-                break
-
-    if not messages:
-        return await message.reply("未找到媒体，请发图片/视频后发送 /telegraph")
-
-    await message.reply(f"🔄 版本20 - 找到 {len(messages)} 条媒体，正在生成 Telegraph...")
-
+@app.on_message(filters.media)
+async def get_link(client, message: Message):
     try:
-        urls = []
-        for m in messages:
-            if not m.media:
-                continue
-            try:
-                # 尝试获取文件并上传
-                file = await m.download(in_memory=True)
-                file_bytes = file.getvalue() if hasattr(file, 'getvalue') else file.read() if hasattr(file, 'read') else file
-                uploaded = upload_file(file_bytes)
-                urls.append(f"https://telegra.ph{uploaded[0]}")
-                await asyncio.sleep(0.8)
-            except:
-                continue
+        # 获取文件直链（Telegram 永久链接）
+        if message.photo:
+            file_id = message.photo.file_id
+            file_type = "图片"
+        elif message.video:
+            file_id = message.video.file_id
+            file_type = "视频"
+        elif message.document:
+            file_id = message.document.file_id
+            file_type = "文件"
+        else:
+            file_type = "媒体"
+            file_id = message.media.file_id if hasattr(message.media, 'file_id') else "未知"
 
-        telegraph = Telegraph()
-        telegraph.create_account(short_name="COSER")
+        # 生成可访问链接
+        link = f"https://t.me/c/{str(message.chat.id)[4:]}/{message.id}"   # 频道讨论组链接
 
-        html = "<h1>COSER 写真</h1><br>"
-        for url in urls:
-            if url.endswith(('.jpg','.jpeg','.png','.gif')):
-                html += f'<img src="{url}"><br><br>'
-            else:
-                html += f'<video src="{url}" controls></video><br><br>'
-
-        page = telegraph.create_page(title="COSER 写真", html_content=html, author_name="COSER Archive")
-
-        await message.reply(f"🎉 **生成完成！**\n\n🔗 {page['url']}")
-
+        await message.reply(f"✅ **{file_type} 链接**\n\n🔗 {link}\n\nFile ID: `{file_id}`")
+        
     except Exception as e:
-        await message.reply(f"❌ 出错: {str(e)}")
+        await message.reply(f"❌ 获取链接失败: {str(e)}")
 
-print("✅ 版本20 已启动")
+print("✅ 版本21 已启动 - 只提取链接")
 app.run()
