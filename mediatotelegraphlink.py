@@ -13,24 +13,24 @@ app = Client(
 
 @app.on_message(filters.command("start"))
 async def start(client, message):
-    await message.reply("✅ **版本17** 已启动\n**使用方法**：在讨论组线程里**回复任意一条消息**（推荐回复封面），然后发送 /telegraph")
+    await message.reply("✅ **版本18** 已启动\n**测试方法**：在讨论组线程里**回复任意一条消息**（比如回复封面），然后发送 /telegraph")
 
 @app.on_message(filters.command("telegraph"))
 async def make_telegraph(client, message: Message):
     if not message.reply_to_message:
         return await message.reply("❌ 请**回复**线程里任意一条消息，然后发送 /telegraph")
 
-    await message.reply("🔄 版本17 - 正在收集...")
+    await message.reply("🔄 版本18 - 正在收集回复链中的媒体...")
 
     try:
-        messages = [message.reply_to_message]
-
-        # 只收集回复链（最可靠的方式）
+        messages = []
         current = message.reply_to_message
-        for _ in range(250):
+        messages.append(current)
+
+        for _ in range(180):
             if not getattr(current, 'reply_to_message', None):
                 break
-            await asyncio.sleep(0.6)
+            await asyncio.sleep(0.7)
             current = await client.get_messages(message.chat.id, current.reply_to_message.id)
             messages.append(current)
 
@@ -43,7 +43,7 @@ async def make_telegraph(client, message: Message):
                 title = m.text.split('\n')[0][:100]
                 break
 
-        await message.reply(f"✅ 找到 {len(messages)} 条内容，开始生成 Telegraph...")
+        await message.reply(f"✅ 找到 {len(messages)} 条内容，开始上传...")
 
         urls = []
         for m in messages:
@@ -75,5 +75,5 @@ async def make_telegraph(client, message: Message):
     except Exception as e:
         await message.reply(f"❌ 出错: {str(e)}")
 
-print("✅ 版本17 已启动")
+print("✅ 版本18 已启动")
 app.run()
