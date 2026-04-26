@@ -14,24 +14,24 @@ collected_media = []
 
 @app.on_message(filters.command("start"))
 async def start(client, message):
-    await message.reply("✅ **版本38** 已启动\n1. 频道发封面图\n2. 讨论组发图片\n3. 发完后输入 /telegraph")
+    await message.reply("✅ **版本39** 已启动\n1. 频道发封面\n2. 讨论组发图片\n3. 发完后 /telegraph")
 
-# 任何媒体消息都检查
-@app.on_message(filters.media)
-async def handle_media(client, message: Message):
+# 频道封面
+@app.on_message(filters.channel & filters.media)
+async def set_cover(client, message: Message):
     global current_cover, collected_media
+    current_cover = message
+    collected_media = []
+    # 默默记录
 
-    chat_id_str = str(message.chat.id)
-
-    # 频道消息 → 记录为封面
-    if chat_id_str.startswith('-100'):
-        current_cover = message
-        collected_media = []
-        return   # 默默记录
-
-    # 讨论组消息 → 收集
+# 讨论组所有媒体都收集（包括每条消息的第一张）
+@app.on_message(filters.media)
+async def collect_media(client, message: Message):
+    global current_cover, collected_media
     if current_cover:
-        collected_media.append(message)
+        chat_id_str = str(message.chat.id)
+        if not chat_id_str.startswith('-100'):   # 确保是讨论组
+            collected_media.append(message)
 
 @app.on_message(filters.command("telegraph"))
 async def generate(client, message: Message):
@@ -48,15 +48,12 @@ async def generate(client, message: Message):
             link = f"https://t.me/c/{str(msg.chat.id)[4:]}/{msg.id}"
             links.append(f"第 {i+1} 张 → {link}")
 
-    if not links:
-        return await message.reply("未找到媒体")
-
-    text = "📸 **提取完成**（封面 + 每组第一张）\n\n" + "\n".join(links)
+    text = "📸 **提取完成**（封面 + 讨论组所有媒体）\n\n" + "\n".join(links)
     await message.reply(text)
 
     # 清空
     current_cover = None
     collected_media = []
 
-print("✅ 版本38 已启动")
+print("✅ 版本39 已启动")
 app.run()
