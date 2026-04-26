@@ -13,42 +13,45 @@ app = Client(
 
 @app.on_message(filters.command("start"))
 async def start(client, message):
-    await message.reply("✅ 机器人已就绪\n直接在讨论组线程发 /telegraph 打包")
+    await message.reply("✅ 机器人已就绪\n在讨论组线程里发 /telegraph")
 
 @app.on_message(filters.command("telegraph"))
 async def make_telegraph(client, message: Message):
-    # 强力获取 thread_id
     thread_id = getattr(message, 'message_thread_id', None)
     if not thread_id and message.reply_to_message:
         thread_id = getattr(message.reply_to_message, 'message_thread_id', None)
-    
-    # 如果还是拿不到，强制使用当前聊天（适用于大多数讨论组）
     if not thread_id:
-        thread_id = 1   # 保底值，很多讨论组默认是1
+        thread_id = 1
 
     await message.reply(f"🔄 检测到线程 (ID: {thread_id})，正在收集媒体...")
 
     try:
-        topic = await client.get_discussion_message(message.chat.id, thread_id)
-        messages = [topic]
+        messages = []
 
-        async for msg in client.get_chat_history(message.chat.id, limit=400, offset_id=topic.id):
-            if getattr(msg, 'message_thread_id', None) == thread_id and msg.media:
+        # 直接从线程里拉取最近 400 条消息（不使用 get_discussion_message）
+        async for msg in client.get_chat_history(message.chat.id, limit=400):
+            if getattr(msg, 'message_thread_id', None) == thread_id:
                 messages.append(msg)
 
+        if not messages:
+            return await message.reply("未找到任何消息")
+
+        # 按时间排序
         messages.sort(key=lambda m: m.date)
 
+        # 提取标题（第一条有文字的消息第一行）
         title = "COSER 写真"
         for m in messages:
             if m.text and m.text.strip():
                 title = m.text.split('\n')[0][:100]
                 break
 
-        await message.reply(f"✅ 找到 {len(messages)} 条媒体，开始上传...")
+        await message.reply(f"✅ 找到 {len(messages)} 条消息，开始上传...")
 
         urls = []
         for m in messages:
-            if not m.media: continue
+            if not m.media: 
+                continue
             try:
                 file = await m.download(in_memory=True)
                 file_bytes = file.getvalue() if hasattr(file, 'getvalue') else file.read() if hasattr(file, 'read') else file
@@ -75,5 +78,5 @@ async def make_telegraph(client, message: Message):
     except Exception as e:
         await message.reply(f"❌ 出错: {str(e)}")
 
-print("✅ 最终版已启动")
+print("✅ 最终绕过限制版已启动")
 app.run()
