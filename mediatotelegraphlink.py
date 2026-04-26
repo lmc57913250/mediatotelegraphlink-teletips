@@ -14,7 +14,7 @@ collected_media = []
 
 @app.on_message(filters.command("start"))
 async def start(client, message):
-    await message.reply("✅ **版本27** 已启动\n1. 在频道发一张封面图\n2. 在讨论组线程发图片\n3. 发完后输入 /telegraph")
+    await message.reply("✅ **版本28** 已启动\n1. 在频道发一张封面图\n2. 在讨论组线程发图片\n3. 发完后输入 /telegraph")
 
 # 检测频道封面
 @app.on_message(filters.channel & filters.media)
@@ -22,10 +22,10 @@ async def detect_cover(client, message: Message):
     global current_cover, collected_media
     current_cover = message
     collected_media = []
-    await message.reply("📌 已记录封面，开始新的一组收集")
+    await message.reply("📌 已记录封面图，开始新的一组")
 
-# 收集讨论组里的媒体
-@app.on_message(filters.supergroup & filters.media)
+# 收集讨论组线程里的媒体
+@app.on_message(filters.chat_type.supergroup & filters.media)
 async def collect_media(client, message: Message):
     global collected_media
     collected_media.append(message)
@@ -55,5 +55,5 @@ async def generate(client, message: Message):
     current_cover = None
     collected_media = []
 
-print("✅ 版本27 已启动")
+print("✅ 版本28 已启动")
 app.run()
