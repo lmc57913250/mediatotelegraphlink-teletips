@@ -10,39 +10,36 @@ app = Client(
 )
 
 current_cover = None
-collected_media = []
+collected_firsts = []   # 存储每组的第一张（包括封面）
 
 @app.on_message(filters.command("start"))
 async def start(client, message):
-    await message.reply("✅ **版本32** 已启动（最稳版）\n1. 频道发封面图\n2. 讨论组发图片\n3. 发完后输入 /telegraph")
+    await message.reply("✅ **版本33** 已启动\n1. 频道发封面图\n2. 讨论组发图片（可分多条）\n3. 发完后输入 /telegraph")
 
-# 任何频道媒体 → 视为封面
+# 频道发图 → 封面
+@app.on_message(filters.channel & filters.media)
+async def set_cover(client, message: Message):
+    global current_cover, collected_firsts
+    current_cover = message
+    collected_firsts = [message]   # 封面作为第一组第一张
+    # 默默记录，不回复
+
+# 讨论组发媒体 → 每条消息的第一张记录下来
 @app.on_message(filters.media)
-async def handle_all_media(client, message: Message):
-    global current_cover, collected_media
-
-    # 如果是频道消息，记录为封面
-    if str(message.chat.id).startswith('-100'):  # 频道 ID 特征
-        current_cover = message
-        collected_media = []
-        # 默默记录，不回复
-        return
-
-    # 其他消息（讨论组）收集媒体
-    if current_cover:
-        collected_media.append(message)
+async def collect_first(client, message: Message):
+    global collected_firsts
+    if current_cover and message.chat.type in ["supergroup", "group"]:
+        collected_firsts.append(message)   # 每条消息的第一张
 
 @app.on_message(filters.command("telegraph"))
 async def generate(client, message: Message):
-    global current_cover, collected_media
+    global current_cover, collected_firsts
 
     if not current_cover:
         return await message.reply("❌ 请先在频道发一张封面图")
 
-    all_media = [current_cover] + collected_media
-
     links = []
-    for i, msg in enumerate(all_media):
+    for i, msg in enumerate(collected_firsts):
         if msg.photo or msg.video or msg.document:
             link = f"https://t.me/c/{str(msg.chat.id)[4:]}/{msg.id}"
             links.append(f"第 {i+1} 张 → {link}")
@@ -50,12 +47,12 @@ async def generate(client, message: Message):
     if not links:
         return await message.reply("未找到媒体")
 
-    text = "📸 **提取完成**（封面 + 讨论组）\n\n" + "\n".join(links)
+    text = "📸 **提取完成**（封面 + 每组第一张）\n\n" + "\n".join(links)
     await message.reply(text)
 
-    # 清空
+    # 清空准备下一组
     current_cover = None
-    collected_media = []
+    collected_firsts = []
 
-print("✅ 版本32 已启动（最稳版）")
+print("✅ 版本33 已启动")
 app.run()
