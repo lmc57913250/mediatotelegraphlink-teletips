@@ -13,24 +13,25 @@ app = Client(
 
 @app.on_message(filters.command("start"))
 async def start(client, message):
-    await message.reply("✅ **版本15** 已启动\n**使用方法**：在讨论组线程里**回复任意一条消息**（推荐回复封面），然后发送 /telegraph")
+    await message.reply("✅ **版本16** 已启动\n**使用方法**：在讨论组线程里**回复任意一条消息**（推荐回复封面），然后发送 /telegraph")
 
 @app.on_message(filters.command("telegraph"))
 async def make_telegraph(client, message: Message):
     if not message.reply_to_message:
         return await message.reply("❌ 请**回复**线程里任意一条消息，然后发送 /telegraph")
 
-    await message.reply("🔄 版本15 - 正在收集...")
+    await message.reply("🔄 版本16 - 正在收集回复链中的媒体...")
 
     try:
-        messages = [message.reply_to_message]
-
-        # 只收集回复链（最可靠）
+        messages = []
         current = message.reply_to_message
-        for _ in range(150):
+        messages.append(current)
+
+        # 只收集回复链（Bot 最可靠的方式）
+        for _ in range(200):
             if not getattr(current, 'reply_to_message', None):
                 break
-            await asyncio.sleep(0.6)
+            await asyncio.sleep(0.8)
             current = await client.get_messages(message.chat.id, current.reply_to_message.id)
             messages.append(current)
 
@@ -76,5 +77,5 @@ async def make_telegraph(client, message: Message):
     except Exception as e:
         await message.reply(f"❌ 出错: {str(e)}")
 
-print("✅ 版本15 已启动")
+print("✅ 版本16 已启动")
 app.run()
