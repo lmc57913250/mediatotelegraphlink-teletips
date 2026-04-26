@@ -14,7 +14,7 @@ states = {}
 
 @app.on_message(filters.command("start"))
 async def start(client, message):
-    await message.reply("✅ **版本54** 已启动\n新组判断阈值 0.05秒（更敏感）")
+    await message.reply("✅ **版本55** 已启动\n新组判断阈值 **0.02秒**（极致敏感）")
 
 @app.on_message(filters.media)
 async def handle_media(client, message: Message):
@@ -34,7 +34,7 @@ async def handle_media(client, message: Message):
         state["last_time"] = now
     else:
         interval = now - state["last_time"]
-        if interval > 0.05:          # ← 这里改成 0.05秒
+        if interval > 0.02:          # ← 改为 0.02 秒
             state["firsts"].append(message)
             print(f"[DEBUG] 新组第一张 (间隔 {interval:.3f}秒): {message.id}")
         else:
@@ -61,5 +61,5 @@ async def generate(client, message: Message):
 
     states[did] = {"cover": None, "firsts": [], "last_time": 0}
 
-print("✅ 版本54 已启动（0.05秒敏感模式）")
+print("✅ 版本55 已启动（0.02秒极致敏感模式）")
 app.run()
