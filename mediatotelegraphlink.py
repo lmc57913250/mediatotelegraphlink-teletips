@@ -10,40 +10,40 @@ app = Client(
     bot_token=os.environ["BOT_TOKEN"]
 )
 
-# 支持多个讨论组独立运行
-states = {}   # discussion_id → {"cover": None, "firsts": [], "last_time": 0}
+states = {}   # discussion_id → state
 
 @app.on_message(filters.command("start"))
 async def start(client, message):
-    await message.reply("✅ **版本52** 已启动\n✅ 只在讨论组工作\n✅ 第一条媒体=封面\n✅ 之后每组取第一张")
+    await message.reply("✅ **版本53** 已启动\n宽松识别模式 + 调试")
 
 @app.on_message(filters.media)
 async def handle_media(client, message: Message):
     global states
 
-    if message.chat.type != "supergroup":
-        return
-
     did = message.chat.id
+    chat_type = message.chat.type
     now = time.time()
+
+    print(f"[DEBUG] 收到媒体消息 | ChatID: {did} | Type: {chat_type} | MsgID: {message.id}")
 
     if did not in states:
         states[did] = {"cover": None, "firsts": [], "last_time": 0}
+        print(f"[DEBUG] 新讨论组已注册: {did}")
 
     state = states[did]
 
     if state["cover"] is None:
-        # 第一条媒体 = 封面
         state["cover"] = message
         state["firsts"] = [message]
         state["last_time"] = now
-        print(f"[DEBUG] 新讨论组 {did} - 封面已记录: {message.id}")
+        print(f"[DEBUG] ✅ 封面已成功记录: {message.id}")
     else:
         interval = now - state["last_time"]
-        if interval > 0.1:          # 大于0.1秒 = 新的一组
+        if interval > 0.1:
             state["firsts"].append(message)
-            print(f"[DEBUG] 新组第一张 (间隔 {interval:.2f}s): {message.id}")
-        # else: 同一组，忽略
+            print(f"[DEBUG] ✅ 新组第一张 (间隔 {interval:.2f}s): {message.id}")
+        else:
+            print(f"[DEBUG] 同一组忽略 (间隔 {interval:.2f}s)")
         state["last_time"] = now
 
 @app.on_message(filters.command("telegraph"))
@@ -64,8 +64,7 @@ async def generate(client, message: Message):
     text = f"📸 **提取完成**（共 {len(links)} 组第一张）\n\n" + "\n".join(links)
     await message.reply(text)
 
-    # 清空当前讨论组
     states[did] = {"cover": None, "firsts": [], "last_time": 0}
 
-print("✅ 版本52 已启动（纯讨论组模式）")
+print("✅ 版本53 已启动（宽松调试版）")
 app.run()
