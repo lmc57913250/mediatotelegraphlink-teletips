@@ -13,19 +13,25 @@ app = Client(
 
 @app.on_message(filters.command("start"))
 async def start(client, message):
-    await message.reply("✅ COSER 打包机器人已就绪\n在讨论组线程里发送 /telegraph 即可")
+    await message.reply("✅ 机器人已就绪\n在**讨论组线程**里发 /telegraph 打包")
 
 @app.on_message(filters.command("telegraph"))
 async def make_telegraph(client, message: Message):
-    # 安全获取 thread_id
+    # 多种方式获取 thread_id
     thread_id = getattr(message, 'message_thread_id', None)
     if not thread_id and message.reply_to_message:
         thread_id = getattr(message.reply_to_message, 'message_thread_id', None)
+    
+    # 如果还是拿不到，尝试从聊天类型判断（讨论组通常是 supergroup）
+    if not thread_id and message.chat.type in ["supergroup", "channel"]:
+        thread_id = getattr(message, 'message_thread_id', 1)  # 保底
+
+    print(f"[DEBUG] thread_id = {thread_id} | chat_id = {message.chat.id}")
 
     if not thread_id:
-        return await message.reply("❌ 请在**频道讨论组的线程**里使用 /telegraph")
+        return await message.reply("❌ 请在**频道帖子的讨论组线程**里使用 /telegraph")
 
-    await message.reply("🔄 正在收集该线程的媒体...")
+    await message.reply("🔄 正在收集媒体，请稍等...")
 
     try:
         topic = await client.get_discussion_message(message.chat.id, thread_id)
@@ -37,19 +43,17 @@ async def make_telegraph(client, message: Message):
 
         messages.sort(key=lambda m: m.date)
 
-        # 提取标题
         title = "COSER 写真"
         for m in messages:
             if m.text and m.text.strip():
                 title = m.text.split('\n')[0][:100]
                 break
 
-        await message.reply(f"✅ 找到 {len(messages)} 条媒体，开始上传...")
+        await message.reply(f"找到 {len(messages)} 条媒体，开始上传...")
 
         urls = []
         for m in messages:
-            if not m.media: 
-                continue
+            if not m.media: continue
             try:
                 file = await m.download(in_memory=True)
                 file_bytes = file.getvalue() if hasattr(file, 'getvalue') else file.read() if hasattr(file, 'read') else file
@@ -74,7 +78,7 @@ async def make_telegraph(client, message: Message):
         await message.reply(f"🎉 **生成完成！**\n\n🔗 {page['url']}")
 
     except Exception as e:
-        await message.reply(f"❌ 处理出错: {str(e)}")
+        await message.reply(f"❌ 出错: {str(e)}")
 
-print("✅ COSER 打包机器人已启动")
+print("✅ COSER 机器人已启动")
 app.run()
