@@ -14,20 +14,21 @@ collected_media = []
 
 @app.on_message(filters.command("start"))
 async def start(client, message):
-    await message.reply("✅ **版本32** 已启动\n默默记录模式\n1. 频道发封面图\n2. 讨论组发图片\n3. 发完后输入 /telegraph")
+    await message.reply("✅ **版本32** 已启动（最稳版）\n1. 频道发封面图\n2. 讨论组发图片\n3. 发完后输入 /telegraph")
 
-# 频道发图片 → 默默记录为封面
-@app.on_message(filters.channel & filters.media)
-async def set_cover(client, message: Message):
+# 任何频道媒体 → 视为封面
+@app.on_message(filters.media)
+async def handle_all_media(client, message: Message):
     global current_cover, collected_media
-    current_cover = message
-    collected_media = []
-    # 不回复任何消息，默默记录
 
-# 讨论组发媒体 → 默默收集
-@app.on_message(filters.chat_type.supergroup & filters.media)
-async def collect_media(client, message: Message):
-    global collected_media
+    # 如果是频道消息，记录为封面
+    if str(message.chat.id).startswith('-100'):  # 频道 ID 特征
+        current_cover = message
+        collected_media = []
+        # 默默记录，不回复
+        return
+
+    # 其他消息（讨论组）收集媒体
     if current_cover:
         collected_media.append(message)
 
@@ -52,9 +53,9 @@ async def generate(client, message: Message):
     text = "📸 **提取完成**（封面 + 讨论组）\n\n" + "\n".join(links)
     await message.reply(text)
 
-    # 清空，准备下一组
+    # 清空
     current_cover = None
     collected_media = []
 
-print("✅ 版本32 已启动（默默记录模式）")
+print("✅ 版本32 已启动（最稳版）")
 app.run()
