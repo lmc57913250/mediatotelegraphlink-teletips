@@ -14,21 +14,24 @@ collected_media = []
 
 @app.on_message(filters.command("start"))
 async def start(client, message):
-    await message.reply("✅ **版本28** 已启动\n1. 在频道发一张封面图\n2. 在讨论组线程发图片\n3. 发完后输入 /telegraph")
+    await message.reply("✅ **版本29** 已启动\n1. 在频道发一张封面图\n2. 在讨论组线程发图片\n3. 发完后输入 /telegraph")
 
-# 检测频道封面
-@app.on_message(filters.channel & filters.media)
-async def detect_cover(client, message: Message):
+# 任何媒体消息都检查
+@app.on_message(filters.media)
+async def handle_media(client, message: Message):
     global current_cover, collected_media
-    current_cover = message
-    collected_media = []
-    await message.reply("📌 已记录封面图，开始新的一组")
 
-# 收集讨论组线程里的媒体
-@app.on_message(filters.chat_type.supergroup & filters.media)
-async def collect_media(client, message: Message):
-    global collected_media
-    collected_media.append(message)
+    # 如果是频道消息，认为是封面
+    if message.chat.type == "channel":
+        current_cover = message
+        collected_media = []
+        await message.reply("📌 已记录封面，开始新的一组")
+        return
+
+    # 如果是 supergroup（讨论组），收集媒体
+    if message.chat.type == "supergroup" or message.chat.type == "group":
+        if current_cover:
+            collected_media.append(message)
 
 @app.on_message(filters.command("telegraph"))
 async def generate(client, message: Message):
@@ -51,9 +54,9 @@ async def generate(client, message: Message):
     text = "📸 **提取完成**（封面 + 讨论组媒体）\n\n" + "\n".join(links)
     await message.reply(text)
 
-    # 清空准备下一组
+    # 清空
     current_cover = None
     collected_media = []
 
-print("✅ 版本28 已启动")
+print("✅ 版本29 已启动")
 app.run()
