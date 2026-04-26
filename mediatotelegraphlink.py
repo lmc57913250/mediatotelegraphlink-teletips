@@ -13,28 +13,28 @@ app = Client(
 
 @app.on_message(filters.command("start"))
 async def start(client, message):
-    await message.reply("✅ **版本11** 已启动\n**使用方法**：在讨论组线程里**回复任意一条消息**，然后发送 /telegraph")
+    await message.reply("✅ **版本12** 已启动\n使用方法：在讨论组线程里**回复任意一条消息**（比如封面或任意图片），然后发送 /telegraph")
 
 @app.on_message(filters.command("telegraph"))
 async def make_telegraph(client, message: Message):
     if not message.reply_to_message:
-        return await message.reply("❌ 请**回复**线程里的任意一条消息，然后发送 /telegraph")
+        return await message.reply("❌ 请**回复**线程里任意一条消息，然后发送 /telegraph")
 
-    await message.reply("🔄 版本11 - 正在收集媒体...")
+    await message.reply("🔄 版本12 - 正在收集回复链中的媒体...")
 
     try:
         messages = []
         current = message.reply_to_message
         messages.append(current)
 
-        # 只使用回复链收集（Bot 最可靠的方式）
+        # 只收集回复链（Bot 最可靠的方式）
         for _ in range(350):
             if not getattr(current, 'reply_to_message', None):
                 break
             current = await client.get_messages(message.chat.id, current.reply_to_message.id)
             messages.append(current)
 
-        # 去重并排序
+        # 去重排序
         messages = list({m.id: m for m in messages}.values())
         messages.sort(key=lambda m: m.date)
 
@@ -76,5 +76,5 @@ async def make_telegraph(client, message: Message):
     except Exception as e:
         await message.reply(f"❌ 出错: {str(e)}")
 
-print("✅ 版本11 已启动")
+print("✅ 版本12 已启动")
 app.run()
