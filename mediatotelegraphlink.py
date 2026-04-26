@@ -13,25 +13,24 @@ app = Client(
 
 @app.on_message(filters.command("start"))
 async def start(client, message):
-    await message.reply("✅ **版本14** 已启动\n**使用方法**：在讨论组线程里**回复任意一条消息**，然后发送 /telegraph")
+    await message.reply("✅ **版本15** 已启动\n**使用方法**：在讨论组线程里**回复任意一条消息**（推荐回复封面），然后发送 /telegraph")
 
 @app.on_message(filters.command("telegraph"))
 async def make_telegraph(client, message: Message):
     if not message.reply_to_message:
         return await message.reply("❌ 请**回复**线程里任意一条消息，然后发送 /telegraph")
 
-    await message.reply("🔄 版本14 - 正在收集回复链中的媒体...")
+    await message.reply("🔄 版本15 - 正在收集...")
 
     try:
-        messages = []
-        current = message.reply_to_message
-        messages.append(current)
+        messages = [message.reply_to_message]
 
-        # 只收集回复链（Bot 最安全的方式）
-        for _ in range(200):
+        # 只收集回复链（最可靠）
+        current = message.reply_to_message
+        for _ in range(150):
             if not getattr(current, 'reply_to_message', None):
                 break
-            await asyncio.sleep(1.0)  # 防限流
+            await asyncio.sleep(0.6)
             current = await client.get_messages(message.chat.id, current.reply_to_message.id)
             messages.append(current)
 
@@ -56,7 +55,7 @@ async def make_telegraph(client, message: Message):
                 file_bytes = file.getvalue() if hasattr(file, 'getvalue') else file.read() if hasattr(file, 'read') else file
                 uploaded = upload_file(file_bytes)
                 urls.append(f"https://telegra.ph{uploaded[0]}")
-                await asyncio.sleep(1.2)   # 防限流
+                await asyncio.sleep(1.0)
             except:
                 continue
 
@@ -77,5 +76,5 @@ async def make_telegraph(client, message: Message):
     except Exception as e:
         await message.reply(f"❌ 出错: {str(e)}")
 
-print("✅ 版本14 已启动")
+print("✅ 版本15 已启动")
 app.run()
