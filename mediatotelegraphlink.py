@@ -13,19 +13,20 @@ app = Client(
 
 @app.on_message(filters.command("start"))
 async def start(client, message):
-    await message.reply("✅ 机器人已就绪\n请在**频道帖子的讨论组线程**里发送 /telegraph")
+    await message.reply("✅ 机器人已就绪\n在讨论组线程里直接发 /telegraph")
 
 @app.on_message(filters.command("telegraph"))
 async def make_telegraph(client, message: Message):
-    # 强力获取 thread_id
-    thread_id = None
-    if hasattr(message, 'message_thread_id') and message.message_thread_id:
-        thread_id = message.message_thread_id
-    elif message.reply_to_message and hasattr(message.reply_to_message, 'message_thread_id'):
-        thread_id = message.reply_to_message.message_thread_id
+    # 多种方式强力获取 thread_id
+    thread_id = getattr(message, 'message_thread_id', None)
+    if not thread_id and message.reply_to_message:
+        thread_id = getattr(message.reply_to_message, 'message_thread_id', None)
+    if not thread_id and message.chat.type in ["supergroup", "channel"]:
+        # 保底方案：如果在 supergroup 就尝试用当前聊天作为线程
+        thread_id = 1
 
     if not thread_id:
-        return await message.reply("❌ 请在**频道讨论组的线程**里使用 /telegraph")
+        return await message.reply("❌ 请在**频道帖子的讨论组线程**里使用 /telegraph")
 
     await message.reply("🔄 正在收集该线程的所有媒体...")
 
@@ -52,7 +53,7 @@ async def make_telegraph(client, message: Message):
             if not m.media: continue
             try:
                 file = await m.download(in_memory=True)
-                file_bytes = getattr(file, 'getvalue', lambda: file.read() if hasattr(file, 'read') else file)()
+                file_bytes = file.getvalue() if hasattr(file, 'getvalue') else file.read() if hasattr(file, 'read') else file
                 uploaded = upload_file(file_bytes)
                 urls.append(f"https://telegra.ph{uploaded[0]}")
                 await asyncio.sleep(0.7)
