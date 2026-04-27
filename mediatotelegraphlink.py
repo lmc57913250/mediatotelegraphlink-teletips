@@ -22,15 +22,18 @@ async def safe_private_reply(user_id, text):
     if user_id:
         try:
             await app.send_message(user_id, text)
-        except:
-            pass
+            print(f"[DEBUG] 成功发送私信给 {user_id}")
+        except Exception as e:
+            print(f"[DEBUG] 发送私信失败: {e}")
+    else:
+        print("[DEBUG] user_id 为 None，无法发送私信")
 
 @app.on_message(filters.command("start"))
 async def start(client, message: Message):
-    user_id = getattr(message, 'from_user', None)
-    user_id = user_id.id if user_id else None
+    user = getattr(message, 'from_user', None)
+    user_id = user.id if user else None
     
-    await message.reply("✅ **版本73** 已启动\n私信同步已开启", reply_markup=keyboard)
+    await message.reply("✅ **版本74** 已启动\n私信同步已开启", reply_markup=keyboard)
     await safe_private_reply(user_id, "✅ 机器人已就绪，所有提取结果都会在这里同步显示")
 
 @app.on_message(filters.text & filters.group)
@@ -62,10 +65,8 @@ async def handle_buttons(client, message: Message):
             output.append("─" * 40)
 
         result_text = "\n".join(output)
-        await message.reply(result_text)
-        await safe_private_reply(user_id, result_text)
-
-        states[did] = {"groups": [], "current": None, "last_time": 0}
+        await message.reply(result_text)           # 群组显示
+        await safe_private_reply(user_id, result_text)  # 私信同步
 
     elif text == "清空当前":
         if did in states:
@@ -102,5 +103,5 @@ async def handle_media(client, message: Message):
 
     state["last_time"] = now
 
-print("✅ 版本73 已启动（稳定版）")
+print("✅ 版本74 已启动（私信同步加强版）")
 app.run()
