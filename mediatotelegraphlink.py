@@ -18,34 +18,38 @@ keyboard = ReplyKeyboardMarkup([
     [KeyboardButton("清空当前")]
 ], resize_keyboard=True)
 
-async def private_reply(user_id: int, text: str):
-    """同时在私人窗口发送"""
-    try:
-        await app.send_message(user_id, text)
-    except:
-        pass
+async def safe_private_reply(user_id, text):
+    if user_id:
+        try:
+            await app.send_message(user_id, text)
+        except:
+            pass
 
 @app.on_message(filters.command("start"))
 async def start(client, message: Message):
-    await message.reply("✅ **版本72** 已启动\n私信同步已开启", reply_markup=keyboard)
-    await private_reply(message.from_user.id, "✅ 机器人已就绪，所有提取结果都会在这里同步显示")
+    user_id = getattr(message, 'from_user', None)
+    user_id = user_id.id if user_id else None
+    
+    await message.reply("✅ **版本73** 已启动\n私信同步已开启", reply_markup=keyboard)
+    await safe_private_reply(user_id, "✅ 机器人已就绪，所有提取结果都会在这里同步显示")
 
 @app.on_message(filters.text & filters.group)
 async def handle_buttons(client, message: Message):
     global states
     text = message.text.strip()
     did = message.chat.id
-    user_id = message.from_user.id
+    user = getattr(message, 'from_user', None)
+    user_id = user.id if user else None
 
     if text == "开始新收集":
         states[did] = {"groups": [], "current": None, "last_time": 0}
         await message.reply("✅ 已开启新收集")
-        await private_reply(user_id, "✅ 已开启新收集模式\n请发送封面图")
+        await safe_private_reply(user_id, "✅ 已开启新收集模式\n请发送封面图")
 
     elif text == "提取链接":
         if did not in states or not states[did].get("groups"):
             await message.reply("❌ 当前没有内容")
-            await private_reply(user_id, "❌ 当前没有正在收集的内容")
+            await safe_private_reply(user_id, "❌ 当前没有正在收集的内容")
             return
 
         output = []
@@ -58,19 +62,17 @@ async def handle_buttons(client, message: Message):
             output.append("─" * 40)
 
         result_text = "\n".join(output)
-        await message.reply(result_text)          # 群组显示
-        await private_reply(user_id, result_text) # 私人窗口同步显示
+        await message.reply(result_text)
+        await safe_private_reply(user_id, result_text)
 
-        # 提取后重置
         states[did] = {"groups": [], "current": None, "last_time": 0}
 
     elif text == "清空当前":
         if did in states:
             states[did] = {"groups": [], "current": None, "last_time": 0}
         await message.reply("✅ 已清空")
-        await private_reply(user_id, "✅ 已清空当前记录")
+        await safe_private_reply(user_id, "✅ 已清空当前记录")
 
-# ==================== 媒体处理 ====================
 @app.on_message(filters.media & filters.group)
 async def handle_media(client, message: Message):
     global states
@@ -100,5 +102,5 @@ async def handle_media(client, message: Message):
 
     state["last_time"] = now
 
-print("✅ 版本72 已启动（私信同步）")
+print("✅ 版本73 已启动（稳定版）")
 app.run()
