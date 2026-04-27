@@ -1,5 +1,5 @@
 from pyrogram import Client, filters
-from pyrogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
+from pyrogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 import os
 import time
 
@@ -11,6 +11,8 @@ app = Client(
 )
 
 states = {}
+user_current_group = {}      # 用户ID -> 当前操作的群组ID
+bot_groups = {}              # 群组ID -> 群组名称
 
 keyboard = ReplyKeyboardMarkup([
     [KeyboardButton("开始新收集")],
@@ -18,41 +20,56 @@ keyboard = ReplyKeyboardMarkup([
     [KeyboardButton("清空当前")]
 ], resize_keyboard=True)
 
-async def safe_private_reply(user_id, text):
-    if user_id:
-        try:
-            await app.send_message(user_id, text)
-            print(f"[DEBUG] 成功发送私信给 {user_id}")
-        except Exception as e:
-            print(f"[DEBUG] 发送私信失败: {e}")
-    else:
-        print("[DEBUG] user_id 为 None，无法发送私信")
-
 @app.on_message(filters.command("start"))
 async def start(client, message: Message):
-    user = getattr(message, 'from_user', None)
-    user_id = user.id if user else None
-    
-    await message.reply("✅ **版本74** 已启动\n私信同步已开启", reply_markup=keyboard)
-    await safe_private_reply(user_id, "✅ 机器人已就绪，所有提取结果都会在这里同步显示")
+    user_id = message.from_user.id
+    await message.reply(
+        "✅ **版本76** 已启动\n\n"
+        "点击「开始新收集」选择群组\n"
+        "其他操作直接点击按钮",
+        reply_markup=keyboard
+    )
 
-@app.on_message(filters.text & filters.group)
-async def handle_buttons(client, message: Message):
-    global states
+# ==================== 自动记录机器人加入的群组 ====================
+@app.on_message(filters.new_chat_members)
+async def on_bot_added(client, message: Message):
+    for member in message.new_chat_members:
+        if member.id == (await client.get_me()).id:
+            chat = message.chat
+            bot_groups[chat.id] = chat.title or f"群组 {chat.id}"
+            print(f"[DEBUG] 机器人加入群组: {chat.title} ({chat.id})")
+
+# ==================== 群组选择菜单 ====================
+@app.on_message(filters.text & filters.private)
+async def handle_private(client, message: Message):
+    global states, user_current_group, bot_groups
     text = message.text.strip()
-    did = message.chat.id
-    user = getattr(message, 'from_user', None)
-    user_id = user.id if user else None
+    user_id = message.from_user.id
 
     if text == "开始新收集":
-        states[did] = {"groups": [], "current": None, "last_time": 0}
-        await message.reply("✅ 已开启新收集")
-        await safe_private_reply(user_id, "✅ 已开启新收集模式\n请发送封面图")
+        if not bot_groups:
+            await message.reply("❌ 机器人还没有加入任何群组\n请先把机器人拉进群并给管理员权限")
+            return
+        
+        # 显示群组选择菜单
+        keyboard = []
+        for gid, gname in bot_groups.items():
+            keyboard.append([InlineKeyboardButton(gname, callback_data=f"select_group_{gid}")])
+        
+        await message.reply(
+            "请选择要操作的群组：",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return
 
-    elif text == "提取链接":
+    if text == "提取链接":
+        did = user_current_group.get(user_id)
+        if not did:
+            await message.reply("❌ 请先点击「开始新收集」选择群组")
+            return
+        
         if did not in states or not states[did].get("groups"):
-            await message.reply("❌ 当前没有内容")
-            await safe_private_reply(user_id, "❌ 当前没有正在收集的内容")
+            await message.reply("❌ 当前没有正在收集的内容")
             return
 
         output = []
@@ -64,16 +81,28 @@ async def handle_buttons(client, message: Message):
                 output.append(f"第 {i} 张 → {link}")
             output.append("─" * 40)
 
-        result_text = "\n".join(output)
-        await message.reply(result_text)           # 群组显示
-        await safe_private_reply(user_id, result_text)  # 私信同步
+        await message.reply("\n".join(output))
 
     elif text == "清空当前":
-        if did in states:
+        did = user_current_group.get(user_id)
+        if did and did in states:
             states[did] = {"groups": [], "current": None, "last_time": 0}
-        await message.reply("✅ 已清空")
-        await safe_private_reply(user_id, "✅ 已清空当前记录")
+        await message.reply("✅ 已清空当前记录")
 
+# ==================== 处理群组选择 ====================
+@app.on_callback_query(filters.regex(r"select_group_(-?\d+)"))
+async def handle_group_select(client, callback):
+    global user_current_group
+    user_id = callback.from_user.id
+    group_id = int(callback.data.split("_")[2])
+    
+    user_current_group[user_id] = group_id
+    group_name = bot_groups.get(group_id, f"群组 {group_id}")
+    
+    await callback.message.edit_text(f"✅ 已选择群组: {group_name}\n现在可以点击「开始新收集」开始操作")
+    await callback.answer()
+
+# ==================== 媒体处理 ====================
 @app.on_message(filters.media & filters.group)
 async def handle_media(client, message: Message):
     global states
@@ -103,5 +132,5 @@ async def handle_media(client, message: Message):
 
     state["last_time"] = now
 
-print("✅ 版本74 已启动（私信同步加强版）")
+print("✅ 版本76 已启动（群组选择菜单）")
 app.run()
