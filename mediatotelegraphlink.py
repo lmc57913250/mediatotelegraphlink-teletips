@@ -31,7 +31,7 @@ async def start(client, message: Message):
             bot_groups[dialog.chat.id] = dialog.chat.title or f"群组 {dialog.chat.id}"
     
     await message.reply(
-        "✅ **版本90** 已启动\n\n"
+        "✅ **版本91** 已启动\n\n"
         f"已自动刷新群组列表，共找到 {len(bot_groups)} 个群组\n\n"
         "点击「开始新收集」选择群组",
         reply_markup=keyboard
@@ -126,7 +126,7 @@ async def handle_group_select(client, callback):
     user_current_group[user_id] = group_id
     group_name = bot_groups.get(group_id, f"群组 {group_id}")
     
-    states[group_id] = {"groups": [], "current": None, "last_time": 0}
+    states[group_id] = {"groups": [], "cover_map": {}}
     
     await callback.message.edit_text(
         f"✅ 已选择群组: {group_name}\n"
@@ -135,7 +135,7 @@ async def handle_group_select(client, callback):
     )
     await callback.answer()
 
-# ==================== 媒体处理（正确处理封面相册 + 讨论组相册） ====================
+# ==================== 媒体处理（基于 reply_to_message.id 精确关联） ====================
 @app.on_message(filters.media & filters.group)
 async def handle_media(client, message: Message):
     global states
@@ -153,45 +153,70 @@ async def handle_media(client, message: Message):
     title = caption.split('\n')[0][:100] if caption else f"第 {len(state.get('groups', []))+1} 组"
 
     if is_new_cover:
+        # 新封面（可能是相册）
         if has_media_group:
+            # 封面相册 → 检查是否是同一相册
             if state.get("current") and state["current"].get("media_group_id") == message.media_group_id:
+                # 同一相册的后续图片 → 跳过
                 print(f"[DEBUG] 跳过封面相册的后续图片: {message.id}")
             else:
-                new_group = {"title": title, "messages": [message], "media_group_id": message.media_group_id}
+                # 新封面相册 → 开始新的一组
+                new_group = {
+                    "title": title,
+                    "messages": [message],
+                    "media_group_id": message.media_group_id,
+                    "cover_id": message.id  # 记录封面ID
+                }
                 if "groups" not in state:
                     state["groups"] = []
                 state["groups"].append(new_group)
                 state["current"] = new_group
+                # 记录封面ID到cover_map
+                if "cover_map" not in state:
+                    state["cover_map"] = {}
+                state["cover_map"][message.id] = len(state["groups"]) - 1
                 print(f"[DEBUG] 新封面相册开始: {title}")
         else:
-            new_group = {"title": title, "messages": [message], "media_group_id": None}
+            # 单个封面图片 → 开始新的一组
+            new_group = {
+                "title": title,
+                "messages": [message],
+                "media_group_id": None,
+                "cover_id": message.id
+            }
             if "groups" not in state:
                 state["groups"] = []
             state["groups"].append(new_group)
             state["current"] = new_group
+            if "cover_map" not in state:
+                state["cover_map"] = {}
+            state["cover_map"][message.id] = len(state["groups"]) - 1
             print(f"[DEBUG] 新封面图片开始: {title}")
     else:
-        if state.get("current"):
-            current_msg = state["current"]["messages"][-1] if state["current"]["messages"] else None
+        # 带回复的消息 → 讨论组
+        if message.reply_to_message:
+            reply_id = message.reply_to_message.id
             
-            if current_msg and current_msg.media_group_id:
-                if message.media_group_id == current_msg.media_group_id:
+            # 查找对应的封面组
+            if "cover_map" in state and reply_id in state["cover_map"]:
+                group_idx = state["cover_map"][reply_id]
+                target_group = state["groups"][group_idx]
+                
+                # 检查是否是同一相册
+                if target_group.get("media_group_id") and message.media_group_id == target_group["media_group_id"]:
+                    # 同一相册 → 跳过
                     print(f"[DEBUG] 跳过讨论组相册的后续图片: {message.id}")
                 else:
-                    state["current"]["messages"].append(message)
-                    print(f"[DEBUG] 新的一组，第一张图片: {message.id}")
+                    # 不同相册 → 添加到对应组
+                    target_group["messages"].append(message)
+                    print(f"[DEBUG] 添加到封面 {reply_id} 的组: {message.id}")
             else:
-                if current_msg and current_msg.reply_to_message:
-                    if message.reply_to_message and current_msg.reply_to_message.id != message.reply_to_message.id:
-                        state["current"]["messages"].append(message)
-                        print(f"[DEBUG] 新的一组，第一张图片: {message.id}")
-                    else:
-                        print(f"[DEBUG] 跳过同一消息的后续图片: {message.id}")
-                else:
+                # 没有找到对应的封面 → 添加到当前组（兜底）
+                if state.get("current"):
                     state["current"]["messages"].append(message)
-                    print(f"[DEBUG] 添加第一张图片: {message.id}")
+                    print(f"[DEBUG] 兜底添加到当前组: {message.id}")
 
     state["last_time"] = now
 
-print("✅ 版本90 已启动（去掉复制按钮）")
+print("✅ 版本91 已启动（基于 reply_to_message.id 精确关联）")
 app.run()
