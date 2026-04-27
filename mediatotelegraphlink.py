@@ -126,7 +126,7 @@ async def handle_group_select(client, callback):
     user_current_group[user_id] = group_id
     group_name = bot_groups.get(group_id, f"群组 {group_id}")
     
-    states[group_id] = {"groups": [], "cover_map": {}}
+    states[group_id] = {"groups": [], "current": None, "last_time": 0}
     
     await callback.message.edit_text(
         f"✅ 已选择群组: {group_name}\n"
@@ -135,7 +135,7 @@ async def handle_group_select(client, callback):
     )
     await callback.answer()
 
-# ==================== 媒体处理（版本90逻辑） ====================
+# ==================== 媒体处理（正确处理封面相册 + 讨论组相册） ====================
 @app.on_message(filters.media & filters.group)
 async def handle_media(client, message: Message):
     global states
@@ -157,54 +157,41 @@ async def handle_media(client, message: Message):
             if state.get("current") and state["current"].get("media_group_id") == message.media_group_id:
                 print(f"[DEBUG] 跳过封面相册的后续图片: {message.id}")
             else:
-                new_group = {
-                    "title": title,
-                    "messages": [message],
-                    "media_group_id": message.media_group_id,
-                    "cover_id": message.id
-                }
+                new_group = {"title": title, "messages": [message], "media_group_id": message.media_group_id}
                 if "groups" not in state:
                     state["groups"] = []
                 state["groups"].append(new_group)
                 state["current"] = new_group
-                if "cover_map" not in state:
-                    state["cover_map"] = {}
-                state["cover_map"][message.id] = len(state["groups"]) - 1
                 print(f"[DEBUG] 新封面相册开始: {title}")
         else:
-            new_group = {
-                "title": title,
-                "messages": [message],
-                "media_group_id": None,
-                "cover_id": message.id
-            }
+            new_group = {"title": title, "messages": [message], "media_group_id": None}
             if "groups" not in state:
                 state["groups"] = []
             state["groups"].append(new_group)
             state["current"] = new_group
-            if "cover_map" not in state:
-                state["cover_map"] = {}
-            state["cover_map"][message.id] = len(state["groups"]) - 1
             print(f"[DEBUG] 新封面图片开始: {title}")
     else:
-        if message.reply_to_message:
-            reply_id = message.reply_to_message.id
+        if state.get("current"):
+            current_msg = state["current"]["messages"][-1] if state["current"]["messages"] else None
             
-            if "cover_map" in state and reply_id in state["cover_map"]:
-                group_idx = state["cover_map"][reply_id]
-                target_group = state["groups"][group_idx]
-                
-                if target_group.get("media_group_id") and message.media_group_id == target_group["media_group_id"]:
+            if current_msg and current_msg.media_group_id:
+                if message.media_group_id == current_msg.media_group_id:
                     print(f"[DEBUG] 跳过讨论组相册的后续图片: {message.id}")
                 else:
-                    target_group["messages"].append(message)
-                    print(f"[DEBUG] 添加到封面 {reply_id} 的组: {message.id}")
-            else:
-                if state.get("current"):
                     state["current"]["messages"].append(message)
-                    print(f"[DEBUG] 兜底添加到当前组: {message.id}")
+                    print(f"[DEBUG] 新的一组，第一张图片: {message.id}")
+            else:
+                if current_msg and current_msg.reply_to_message:
+                    if message.reply_to_message and current_msg.reply_to_message.id != message.reply_to_message.id:
+                        state["current"]["messages"].append(message)
+                        print(f"[DEBUG] 新的一组，第一张图片: {message.id}")
+                    else:
+                        print(f"[DEBUG] 跳过同一消息的后续图片: {message.id}")
+                else:
+                    state["current"]["messages"].append(message)
+                    print(f"[DEBUG] 添加第一张图片: {message.id}")
 
     state["last_time"] = now
 
-print("✅ 版本90 已启动")
+print("✅ 版本90 已启动（去掉复制按钮）")
 app.run()
