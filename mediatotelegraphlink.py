@@ -19,19 +19,17 @@ keyboard = ReplyKeyboardMarkup([
 ], resize_keyboard=True)
 
 async def private_reply(user_id: int, text: str):
+    """同时在私人窗口发送"""
     try:
-        await app.send_message(user_id, text, reply_markup=keyboard)
+        await app.send_message(user_id, text)
     except:
         pass
 
 @app.on_message(filters.command("start"))
 async def start(client, message: Message):
-    await private_reply(message.from_user.id, 
-        "✅ **机器人已就绪**（版本71 零痕迹版）\n\n"
-        "所有操作和结果只会在这里显示\n"
-        "请使用下方按钮：")
+    await message.reply("✅ **版本72** 已启动\n私信同步已开启", reply_markup=keyboard)
+    await private_reply(message.from_user.id, "✅ 机器人已就绪，所有提取结果都会在这里同步显示")
 
-# ==================== 按钮处理（群组完全不发消息） ====================
 @app.on_message(filters.text & filters.group)
 async def handle_buttons(client, message: Message):
     global states
@@ -41,10 +39,12 @@ async def handle_buttons(client, message: Message):
 
     if text == "开始新收集":
         states[did] = {"groups": [], "current": None, "last_time": 0}
-        await private_reply(user_id, "✅ **已开启新收集**\n请在群组发送封面图")
+        await message.reply("✅ 已开启新收集")
+        await private_reply(user_id, "✅ 已开启新收集模式\n请发送封面图")
 
     elif text == "提取链接":
         if did not in states or not states[did].get("groups"):
+            await message.reply("❌ 当前没有内容")
             await private_reply(user_id, "❌ 当前没有正在收集的内容")
             return
 
@@ -57,16 +57,20 @@ async def handle_buttons(client, message: Message):
                 output.append(f"第 {i} 张 → {link}")
             output.append("─" * 40)
 
-        await private_reply(user_id, "\n".join(output))
+        result_text = "\n".join(output)
+        await message.reply(result_text)          # 群组显示
+        await private_reply(user_id, result_text) # 私人窗口同步显示
 
+        # 提取后重置
         states[did] = {"groups": [], "current": None, "last_time": 0}
 
     elif text == "清空当前":
         if did in states:
             states[did] = {"groups": [], "current": None, "last_time": 0}
+        await message.reply("✅ 已清空")
         await private_reply(user_id, "✅ 已清空当前记录")
 
-# ==================== 媒体处理（完全静默） ====================
+# ==================== 媒体处理 ====================
 @app.on_message(filters.media & filters.group)
 async def handle_media(client, message: Message):
     global states
@@ -96,5 +100,5 @@ async def handle_media(client, message: Message):
 
     state["last_time"] = now
 
-print("✅ 版本71 已启动（群组零痕迹 + 私人窗口）")
+print("✅ 版本72 已启动（私信同步）")
 app.run()
