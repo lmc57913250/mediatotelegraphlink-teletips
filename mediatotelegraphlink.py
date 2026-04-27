@@ -1,23 +1,36 @@
+from pyrogram import Client, filters
+from pyrogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+import os
+import time
+import re
+
+# 1. 先定义 app
+app = Client(
+    "COSERBot",
+    api_id=int(os.environ["API_ID"]),
+    api_hash=os.environ["API_HASH"],
+    bot_token=os.environ["BOT_TOKEN"]
+)
+
+states = {}
+user_current_group = {}
+bot_groups = {}
+
+keyboard = ReplyKeyboardMarkup([
+    [KeyboardButton("开始新收集")],
+    [KeyboardButton("提取链接")],
+    [KeyboardButton("清空当前")],
+    [KeyboardButton("刷新群组列表")]
+], resize_keyboard=True)
+
+# 2. 然后定义装饰器
+@app.on_message(filters.command("start"))
+async def start(client, message: Message):
+    # ... 代码
+
 @app.on_message(filters.media & filters.group)
 async def handle_media(client, message: Message):
-    global states
-    did = message.chat.id
-    if did not in states:
-        return
+    # ... 代码
 
-    state = states[did]
-    now = time.time()
-
-    is_new_cover = (message.reply_to_message is None)
-    has_media_group = message.media_group_id is not None
-
-    print(f"[DEBUG] 消息 ID: {message.id}")
-    print(f"[DEBUG] 是否有回复: {message.reply_to_message is not None}")
-    if message.reply_to_message:
-        print(f"[DEBUG] 回复的 ID: {message.reply_to_message.id}")
-    if message.media_group_id:
-        print(f"[DEBUG] 媒体组 ID: {message.media_group_id}")
-    else:
-        print(f"[DEBUG] 没有媒体组 ID")
-    
-    # ... 其余代码保持不变
+print("✅ 机器人已启动")
+app.run()
