@@ -22,13 +22,20 @@ keyboard = ReplyKeyboardMarkup([
     [KeyboardButton("刷新群组列表")]
 ], resize_keyboard=True)
 
+# ==================== 启动时自动刷新群组列表 ====================
 @app.on_message(filters.command("start"))
 async def start(client, message: Message):
+    global bot_groups
+    # 自动刷新群组列表
+    bot_groups.clear()
+    async for dialog in client.get_dialogs():
+        if dialog.chat.type in ["supergroup", "group"]:
+            bot_groups[dialog.chat.id] = dialog.chat.title or f"群组 {dialog.chat.id}"
+    
     await message.reply(
-        "✅ **版本81** 已启动\n\n"
-        "点击「开始新收集」选择群组\n"
-        "如果群组列表为空，请点击「刷新群组列表」\n"
-        "或者直接输入群组链接/ID",
+        "✅ **版本82** 已启动\n\n"
+        f"已自动刷新群组列表，共找到 {len(bot_groups)} 个群组\n\n"
+        "点击「开始新收集」选择群组",
         reply_markup=keyboard
     )
 
@@ -42,12 +49,9 @@ async def handle_private(client, message: Message):
     # 识别群组链接 (t.me/xxx 或 t.me/+xxx)
     if "t.me/" in text:
         try:
-            # 提取用户名或邀请链接
             if "/+" in text:
-                # 邀请链接，尝试获取chat
                 chat = await client.get_chat(text)
             else:
-                # 用户名链接
                 username = text.split("t.me/")[1].split("/")[0]
                 chat = await client.get_chat(username)
             
@@ -159,5 +163,5 @@ async def handle_media(client, message: Message):
 
     state["last_time"] = now
 
-print("✅ 版本81 已启动（识别群组链接）")
+print("✅ 版本82 已启动（启动时自动刷新）")
 app.run()
