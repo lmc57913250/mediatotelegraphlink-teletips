@@ -31,7 +31,7 @@ async def start(client, message: Message):
             bot_groups[dialog.chat.id] = dialog.chat.title or f"群组 {dialog.chat.id}"
     
     await message.reply(
-        "✅ **版本94** 已启动\n\n"
+        "✅ **版本95** 已启动\n\n"
         f"已自动刷新群组列表，共找到 {len(bot_groups)} 个群组\n\n"
         "点击「开始新收集」选择群组",
         reply_markup=keyboard
@@ -99,7 +99,10 @@ async def handle_private(client, message: Message):
             await message.reply("❌ 当前没有正在收集的内容")
             return
 
-        for g_idx, group in enumerate(states[did]["groups"], 1):
+        # 方式3：自动提取 + 分组 + 排序
+        groups = states[did]["groups"]
+        
+        for g_idx, group in enumerate(groups, 1):
             title = group.get("title", f"第 {g_idx} 组")
             clean_title = title.replace("【", "").replace("】", "")
             
@@ -135,7 +138,7 @@ async def handle_group_select(client, callback):
     )
     await callback.answer()
 
-# ==================== 媒体处理（彻底修复） ====================
+# ==================== 媒体处理（版本90逻辑 + 自动分组） ====================
 @app.on_message(filters.media & filters.group)
 async def handle_media(client, message: Message):
     global states
@@ -195,21 +198,17 @@ async def handle_media(client, message: Message):
                 group_idx = state["cover_map"][reply_id]
                 target_group = state["groups"][group_idx]
                 
-                # 检查是否是同一相册
                 if target_group.get("media_group_id") and message.media_group_id == target_group["media_group_id"]:
-                    # 同一相册 → 跳过
                     print(f"[DEBUG] 跳过讨论组相册的后续图片: {message.id}")
                 else:
-                    # 不同相册 → 添加到对应组
                     target_group["messages"].append(message)
                     print(f"[DEBUG] 添加到封面 {reply_id} 的组: {message.id}")
             else:
-                # 没有找到对应的封面 → 添加到当前组（兜底）
                 if state.get("current"):
                     state["current"]["messages"].append(message)
                     print(f"[DEBUG] 兜底添加到当前组: {message.id}")
 
     state["last_time"] = now
 
-print("✅ 版本94 已启动（彻底修复）")
+print("✅ 版本95 已启动（方式3：自动提取 + 分组 + 排序）")
 app.run()
