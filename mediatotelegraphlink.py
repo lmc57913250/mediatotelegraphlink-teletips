@@ -2,6 +2,7 @@ from pyrogram import Client, filters
 from pyrogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 import os
 import time
+import re
 
 app = Client(
     "COSERBot",
@@ -24,25 +25,49 @@ keyboard = ReplyKeyboardMarkup([
 @app.on_message(filters.command("start"))
 async def start(client, message: Message):
     await message.reply(
-        "✅ **版本80** 已启动\n\n"
+        "✅ **版本81** 已启动\n\n"
         "点击「开始新收集」选择群组\n"
-        "如果群组列表为空，请点击「刷新群组列表」",
+        "如果群组列表为空，请点击「刷新群组列表」\n"
+        "或者直接输入群组链接/ID",
         reply_markup=keyboard
     )
 
-# ==================== @机器人时回复 ====================
-@app.on_message(filters.mentioned & filters.group)
-async def on_mentioned(client, message: Message):
-    chat = message.chat
-    bot_groups[chat.id] = chat.title or f"群组 {chat.id}"
-    await message.reply("✅ 机器人已就绪\n群组已记录，现在可以在私信操作了")
-
-# ==================== 刷新群组列表 ====================
+# ==================== 识别群组链接/ID ====================
 @app.on_message(filters.text & filters.private)
 async def handle_private(client, message: Message):
     global states, user_current_group, bot_groups
     text = message.text.strip()
     user_id = message.from_user.id
+
+    # 识别群组链接 (t.me/xxx 或 t.me/+xxx)
+    if "t.me/" in text:
+        try:
+            # 提取用户名或邀请链接
+            if "/+" in text:
+                # 邀请链接，尝试获取chat
+                chat = await client.get_chat(text)
+            else:
+                # 用户名链接
+                username = text.split("t.me/")[1].split("/")[0]
+                chat = await client.get_chat(username)
+            
+            bot_groups[chat.id] = chat.title or f"群组 {chat.id}"
+            await message.reply(f"✅ 已添加群组: {bot_groups[chat.id]}")
+            return
+        except Exception as e:
+            await message.reply(f"❌ 添加群组失败: {e}\n请直接输入群组ID（以 -100 开头）")
+            return
+
+    # 识别群组ID（以 -100 开头）
+    if text.startswith("-100") and text[1:].isdigit():
+        gid = int(text)
+        try:
+            chat = await client.get_chat(gid)
+            bot_groups[gid] = chat.title or f"群组 {gid}"
+            await message.reply(f"✅ 已添加群组: {bot_groups[gid]}")
+        except Exception as e:
+            await message.reply(f"❌ 添加群组失败: {e}")
+        return
 
     if text == "刷新群组列表":
         bot_groups.clear()
@@ -54,7 +79,7 @@ async def handle_private(client, message: Message):
 
     if text == "开始新收集":
         if not bot_groups:
-            await message.reply("❌ 机器人还没有加入任何群组\n请点击「刷新群组列表」\n或者直接输入群组ID（以 -100 开头）")
+            await message.reply("❌ 机器人还没有加入任何群组\n请点击「刷新群组列表」\n或者直接输入群组链接/ID")
             return
         
         keyboard = []
@@ -62,17 +87,6 @@ async def handle_private(client, message: Message):
             keyboard.append([InlineKeyboardButton(gname, callback_data=f"select_group_{gid}")])
         
         await message.reply("请选择要操作的群组：", reply_markup=InlineKeyboardMarkup(keyboard))
-        return
-
-    # 如果用户输入群组ID（以 -100 开头）
-    if text.startswith("-100") and text[1:].isdigit():
-        gid = int(text)
-        try:
-            chat = await client.get_chat(gid)
-            bot_groups[gid] = chat.title or f"群组 {gid}"
-            await message.reply(f"✅ 已添加群组: {bot_groups[gid]}")
-        except Exception as e:
-            await message.reply(f"❌ 添加群组失败: {e}")
         return
 
     if text == "提取链接":
@@ -145,5 +159,5 @@ async def handle_media(client, message: Message):
 
     state["last_time"] = now
 
-print("✅ 版本80 已启动（@机器人自动记录）")
+print("✅ 版本81 已启动（识别群组链接）")
 app.run()
