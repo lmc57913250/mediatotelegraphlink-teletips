@@ -21,7 +21,7 @@ keyboard = ReplyKeyboardMarkup([
 
 @app.on_message(filters.command("start"))
 async def start(client, message: Message):
-    await message.reply("✅ **版本67** 已启动\n顶图链接置于标题下方", reply_markup=keyboard)
+    await message.reply("✅ **版本68** 已启动\n顶图 + 标题提取已修复", reply_markup=keyboard)
 
 @app.on_message(filters.text)
 async def handle_buttons(client, message: Message):
@@ -45,7 +45,7 @@ async def handle_buttons(client, message: Message):
             
             output.append(f"【{title}】")
             output.append(f"顶图: {cover_url}")
-            output.append("")  # 空行
+            output.append("")
             
             for i, msg in enumerate(group["messages"], 1):
                 link = f"https://t.me/c/{str(did)[4:]}/{msg.id}"
@@ -74,8 +74,9 @@ async def handle_media(client, message: Message):
     state = states[did]
     now = time.time()
 
-    is_new_cover = message.reply_to_message is None
+    is_new_cover = (message.reply_to_message is None)
 
+    # 提取标题（封面说明第一行）
     caption = (message.caption or "").strip()
     title = caption.split('\n')[0][:100] if caption else f"第 {len(state['groups'])+1} 组"
 
@@ -88,7 +89,7 @@ async def handle_media(client, message: Message):
         state["groups"].append(new_group)
         state["current"] = new_group
         
-        # 自动转发获取顶图
+        # 自动转发封面给图床机器人
         await message.forward("img_mom_bot")
     else:
         if state["current"] is not None:
@@ -98,25 +99,27 @@ async def handle_media(client, message: Message):
     
     state["last_time"] = now
 
-# 接收图床机器人回复
+# ==================== 接收图床机器人回复 ====================
+
 @app.on_message(filters.chat("img_mom_bot"))
 async def handle_imgmom_reply(client, message: Message):
     global states
-    if not message.text or "Successfully uploaded image" not in message.text:
+    if not message.text:
         return
 
+    # 更强的正则匹配
     match = re.search(r'https?://[^\s]+', message.text)
     if not match:
         return
-    
+
     public_url = match.group(0)
 
-    # 给最近一组加上顶图链接
+    # 给最近一个没有顶图的组加上链接
     for did, state in list(states.items()):
         if state["groups"] and state["groups"][-1].get("cover_url") is None:
             state["groups"][-1]["cover_url"] = public_url
             print(f"[DEBUG] 顶图链接已保存: {public_url}")
-            break
+            return   # 只处理一次
 
-print("✅ 版本67 已启动（顶图链接置于标题下方）")
+print("✅ 版本68 已启动（顶图 + 标题双修复）")
 app.run()
