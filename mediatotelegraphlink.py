@@ -109,7 +109,12 @@ async def handle_private(client, message: Message):
             output = f"{title}\n"
 
             for i, msg in enumerate(group["messages"], 1):
-                link = f"https://t.me/c/{str(did)[4:]}/{msg.id}"
+                chat = await client.get_chat(did)
+
+if chat.username:
+    link = f"https://t.me/{chat.username}/{msg.id}"
+else:
+    link = f"https://t.me/c/{str(did)[4:]}/{msg.id}"
                 output += f"第 {i} 张 → {link}\n"
 
             await message.reply(output.strip())
