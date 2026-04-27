@@ -20,7 +20,7 @@ keyboard = ReplyKeyboardMarkup([
 
 @app.on_message(filters.command("start"))
 async def start(client, message: Message):
-    await message.reply("✅ **机器人已就绪**（版本59）\n使用下方按钮操作", reply_markup=keyboard)
+    await message.reply("✅ **版本62** 已启动\n支持多组封面自动识别", reply_markup=keyboard)
 
 @app.on_message(filters.text)
 async def handle_buttons(client, message: Message):
@@ -29,46 +29,60 @@ async def handle_buttons(client, message: Message):
     did = message.chat.id
 
     if text == "开始新收集":
-        if did not in states:
-            states[did] = {"cover": None, "firsts": [], "last_time": 0}
-        states[did]["cover"] = None
-        states[did]["firsts"] = []
-        await message.reply("✅ **已开启新收集**\n请发送第一张封面图")
+        states[did] = {"groups": [], "current": None, "last_time": 0}
+        await message.reply("✅ 已开启收集模式\n可连续传多个封面")
 
     elif text == "提取链接":
-        if did not in states or not states[did]["firsts"]:
-            await message.reply("❌ 当前没有正在收集的内容\n请先点击「开始新收集」并发送图片")
+        if did not in states or not states[did]["groups"]:
+            await message.reply("❌ 当前没有内容")
             return
 
-        links = [f"https://t.me/c/{str(did)[4:]}/{msg.id}" for msg in states[did]["firsts"]]
-        output = "\n".join(links)
-        await message.reply(f"📸 **提取完成**（共 {len(links)} 张）\n\n{output}")
+        output = []
+        for g_idx, group in enumerate(states[did]["groups"], 1):
+            output.append(f"【第 {g_idx} 组】")
+            for i, msg in enumerate(group, 1):
+                link = f"https://t.me/c/{str(did)[4:]}/{msg.id}"
+                output.append(f"第 {i} 张 → {link}")
+            output.append("─" * 30)   # 分隔线
+
+        await message.reply("\n".join(output))
+
+        # 提取后清空
+        states[did] = {"groups": [], "current": None, "last_time": 0}
 
     elif text == "清空当前":
         if did in states:
-            states[did] = {"cover": None, "firsts": [], "last_time": 0}
-        await message.reply("✅ 已清空当前记录")
+            states[did] = {"groups": [], "current": None, "last_time": 0}
+        await message.reply("✅ 已清空")
 
 @app.on_message(filters.media)
 async def handle_media(client, message: Message):
     global states
     did = message.chat.id
     if did not in states:
-        return  # 没开启收集就忽略
+        return
 
     state = states[did]
     now = time.time()
 
-    if state["cover"] is None:
-        state["cover"] = message
-        state["firsts"] = [message]
-        state["last_time"] = now
-        await message.reply("📌 封面已记录，继续发送图片吧")
-    else:
-        interval = now - state["last_time"]
-        if interval > 0.02:
-            state["firsts"].append(message)
-        state["last_time"] = now
+    # 关键判断：不带回复的消息 = 新封面
+    is_new_cover = message.reply_to_message is None
 
-print("✅ 版本59 已启动（修复收集逻辑）")
+    if is_new_cover:
+        # 新封面 → 开始新的一组
+        new_group = [message]
+        state["groups"].append(new_group)
+        state["current"] = new_group
+        print(f"[DEBUG] 新封面组开始: {message.id}")
+    else:
+        # 带回复的消息 = 当前组的内容
+        if state["current"] is not None:
+            interval = now - state["last_time"]
+            if interval > 0.02:
+                state["current"].append(message)
+                print(f"[DEBUG] 当前组添加: {message.id}")
+    
+    state["last_time"] = now
+
+print("✅ 版本62 已启动（多组自动识别）")
 app.run()
