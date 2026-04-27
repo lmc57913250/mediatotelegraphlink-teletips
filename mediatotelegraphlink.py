@@ -108,12 +108,7 @@ async def handle_private(client, message: Message):
                 link = f"https://t.me/c/{str(did)[4:]}/{msg.id}"
                 output += f"第 {i} 张 → {link}\n"
             
-            # 使用 copy_text 实现一键复制到剪贴板
-            copy_keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton("📋 复制本组", copy_text=output.strip())]
-            ])
-            
-            await message.reply(output.strip(), reply_markup=copy_keyboard)
+            await message.reply(output.strip())
 
     elif text == "清空当前":
         did = user_current_group.get(user_id)
@@ -198,5 +193,5 @@ async def handle_media(client, message: Message):
 
     state["last_time"] = now
 
-print("✅ 版本90 已启动（一键复制到剪贴板）")
+print("✅ 版本90 已启动（去掉复制按钮）")
 app.run()
