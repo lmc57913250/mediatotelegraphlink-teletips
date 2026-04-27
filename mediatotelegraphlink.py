@@ -31,7 +31,7 @@ async def start(client, message: Message):
             bot_groups[dialog.chat.id] = dialog.chat.title or f"群组 {dialog.chat.id}"
     
     await message.reply(
-        "✅ **版本83** 已启动\n\n"
+        "✅ **版本84** 已启动\n\n"
         f"已自动刷新群组列表，共找到 {len(bot_groups)} 个群组\n\n"
         "点击「开始新收集」选择群组",
         reply_markup=keyboard
@@ -99,16 +99,23 @@ async def handle_private(client, message: Message):
             await message.reply("❌ 当前没有正在收集的内容")
             return
 
-        output = []
+        # 生成带复制按钮的输出
         for g_idx, group in enumerate(states[did]["groups"], 1):
             title = group.get("title", f"第 {g_idx} 组")
-            output.append(f"【{title}】")
+            # 去掉【】
+            clean_title = title.replace("【", "").replace("】", "")
+            
+            output = f"【{clean_title}】\n"
             for i, msg in enumerate(group["messages"], 1):
                 link = f"https://t.me/c/{str(did)[4:]}/{msg.id}"
-                output.append(f"第 {i} 张 → {link}")
-            output.append("─" * 40)
-
-        await message.reply("\n".join(output))
+                output += f"第 {i} 张 → {link}\n"
+            
+            # 添加复制按钮
+            copy_keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton("📋 复制本组", callback_data=f"copy_group_{did}_{g_idx-1}")]
+            ])
+            
+            await message.reply(output.strip(), reply_markup=copy_keyboard)
 
     elif text == "清空当前":
         did = user_current_group.get(user_id)
@@ -116,7 +123,7 @@ async def handle_private(client, message: Message):
             states[did] = {"groups": [], "current": None, "last_time": 0}
         await message.reply("✅ 已清空当前记录")
 
-# ==================== 群组选择（选择后自动开启收集） ====================
+# ==================== 群组选择 ====================
 @app.on_callback_query(filters.regex(r"select_group_(-?\d+)"))
 async def handle_group_select(client, callback):
     global user_current_group, states
@@ -126,7 +133,6 @@ async def handle_group_select(client, callback):
     user_current_group[user_id] = group_id
     group_name = bot_groups.get(group_id, f"群组 {group_id}")
     
-    # 自动开启收集模式
     states[group_id] = {"groups": [], "current": None, "last_time": 0}
     
     await callback.message.edit_text(
@@ -135,6 +141,28 @@ async def handle_group_select(client, callback):
         f"请在群组发送封面图"
     )
     await callback.answer()
+
+# ==================== 一键复制功能 ====================
+@app.on_callback_query(filters.regex(r"copy_group_(-?\d+)_(\d+)"))
+async def handle_copy_group(client, callback):
+    did = int(callback.data.split("_")[2])
+    group_idx = int(callback.data.split("_")[3])
+    
+    if did not in states or group_idx >= len(states[did].get("groups", [])):
+        await callback.answer("❌ 内容已过期，请重新提取", show_alert=True)
+        return
+    
+    group = states[did]["groups"][group_idx]
+    title = group.get("title", f"第 {group_idx+1} 组")
+    clean_title = title.replace("【", "").replace("】", "")
+    
+    output = f"{clean_title}\n"
+    for i, msg in enumerate(group["messages"], 1):
+        link = f"https://t.me/c/{str(did)[4:]}/{msg.id}"
+        output += f"第 {i} 张 → {link}\n"
+    
+    await callback.message.reply(f"📋 已复制内容：\n\n{output.strip()}")
+    await callback.answer("✅ 已复制到剪贴板")
 
 # ==================== 媒体处理 ====================
 @app.on_message(filters.media & filters.group)
@@ -166,5 +194,5 @@ async def handle_media(client, message: Message):
 
     state["last_time"] = now
 
-print("✅ 版本83 已启动（选择后自动开启）")
+print("✅ 版本84 已启动（一键复制按钮）")
 app.run()
