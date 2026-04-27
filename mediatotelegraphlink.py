@@ -11,6 +11,7 @@ app = Client(
 )
 
 states = {}
+bot_messages = {}   # 记录机器人自己在群组发送的消息ID，用于清空时删除
 
 keyboard = ReplyKeyboardMarkup([
     [KeyboardButton("开始新收集")],
@@ -18,55 +19,56 @@ keyboard = ReplyKeyboardMarkup([
     [KeyboardButton("清空当前")]
 ], resize_keyboard=True)
 
-# ==================== 私人回复函数 ====================
-async def private_reply(user_id: int, text: str):
-    try:
-        await app.send_message(user_id, text)
-    except:
-        pass
+async def send_and_record(client, chat_id: int, text: str):
+    """发送消息并记录ID，用于后续删除"""
+    msg = await client.send_message(chat_id, text, reply_markup=keyboard)
+    if chat_id not in bot_messages:
+        bot_messages[chat_id] = []
+    bot_messages[chat_id].append(msg.id)
+    return msg
 
 @app.on_message(filters.command("start"))
 async def start(client, message: Message):
-    await private_reply(message.from_user.id, 
-        "✅ **机器人已就绪**（版本68 零痕迹版）\n\n"
-        "所有操作和结果只会在这里显示\n"
-        "请使用下方快捷按钮操作：")
-    # 不在群组回复任何消息
-    await message.reply("✅ 已就绪", reply_markup=keyboard)  # 只显示一次键盘
+    await send_and_record(client, message.chat.id, "✅ **机器人已就绪**（版本70）\n使用下方按钮操作")
 
-# ==================== 按钮处理（只在群组触发，回复到私聊） ====================
 @app.on_message(filters.text & filters.group)
 async def handle_buttons(client, message: Message):
-    global states
+    global states, bot_messages
     text = message.text.strip()
     did = message.chat.id
     user_id = message.from_user.id
 
     if text == "开始新收集":
-        if did not in states:
-            states[did] = {"groups": [], "current": None, "last_time": 0}
-        states[did]["cover"] = None
-        states[did]["firsts"] = []
-        await private_reply(user_id, "✅ **已开启新收集**\n请在群组发送封面图")
+        states[did] = {"groups": [], "current": None, "last_time": 0}
+        await send_and_record(client, did, "✅ 已开启新收集模式")
 
     elif text == "提取链接":
         if did not in states or not states[did].get("firsts"):
-            await private_reply(user_id, "❌ 当前没有正在收集的内容")
+            await send_and_record(client, did, "❌ 当前没有正在收集的内容")
             return
 
         links = [f"https://t.me/c/{str(did)[4:]}/{msg.id}" for msg in states[did]["firsts"]]
         output = "\n".join(links)
-        await private_reply(user_id, f"📸 **提取完成**（共 {len(links)} 组）\n\n{output}")
+        await send_and_record(client, did, f"📸 **提取完成**（共 {len(links)} 组）\n\n{output}")
 
-        # 自动重置
         states[did] = {"groups": [], "current": None, "last_time": 0}
 
     elif text == "清空当前":
         if did in states:
             states[did] = {"groups": [], "current": None, "last_time": 0}
-        await private_reply(user_id, "✅ 已清空当前记录")
+        
+        # 删除机器人自己之前发送的所有消息
+        if did in bot_messages:
+            for msg_id in bot_messages[did]:
+                try:
+                    await client.delete_messages(did, msg_id)
+                except:
+                    pass
+            bot_messages[did] = []
+        
+        await send_and_record(client, did, "✅ 已清空当前记录并删除机器人消息")
 
-# ==================== 媒体处理（完全静默） ====================
+# 媒体处理（静默）
 @app.on_message(filters.media & filters.group)
 async def handle_media(client, message: Message):
     global states
@@ -96,5 +98,5 @@ async def handle_media(client, message: Message):
 
     state["last_time"] = now
 
-print("✅ 版本68 已启动（群组零痕迹版）")
+print("✅ 版本70 已启动（清空时删除机器人消息）")
 app.run()
