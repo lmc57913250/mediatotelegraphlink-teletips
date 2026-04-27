@@ -31,7 +31,7 @@ async def start(client, message: Message):
             bot_groups[dialog.chat.id] = dialog.chat.title or f"群组 {dialog.chat.id}"
     
     await message.reply(
-        "✅ **版本96** 已启动\n\n"
+        "✅ **版本97** 已启动\n\n"
         f"已自动刷新群组列表，共找到 {len(bot_groups)} 个群组\n\n"
         "点击「开始新收集」选择群组",
         reply_markup=keyboard
@@ -135,7 +135,7 @@ async def handle_group_select(client, callback):
     )
     await callback.answer()
 
-# ==================== 媒体处理（基于讨论组） ====================
+# ==================== 媒体处理（每个相册只提取第一张 + 封面和讨论组划成一组） ====================
 @app.on_message(filters.media & filters.group)
 async def handle_media(client, message: Message):
     global states
@@ -159,7 +159,7 @@ async def handle_media(client, message: Message):
             else:
                 new_group = {
                     "title": title,
-                    "messages": [message],
+                    "messages": [message],  # 只添加第一张
                     "media_group_id": message.media_group_id,
                     "cover_id": message.id
                 }
@@ -207,5 +207,5 @@ async def handle_media(client, message: Message):
 
     state["last_time"] = now
 
-print("✅ 版本96 已启动（基于讨论组提取）")
+print("✅ 版本97 已启动（每个相册只提取第一张 + 封面和讨论组划成一组）")
 app.run()
