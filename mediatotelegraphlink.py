@@ -31,7 +31,7 @@ async def start(client, message: Message):
             bot_groups[dialog.chat.id] = dialog.chat.title or f"群组 {dialog.chat.id}"
     
     await message.reply(
-        "✅ **版本87** 已启动\n\n"
+        "✅ **版本88** 已启动\n\n"
         f"已自动刷新群组列表，共找到 {len(bot_groups)} 个群组\n\n"
         "点击「开始新收集」选择群组",
         reply_markup=keyboard
@@ -161,7 +161,7 @@ async def handle_copy_group(client, callback):
     await callback.message.reply(f"📋 已复制内容：\n\n{output.strip()}")
     await callback.answer("✅ 已复制到剪贴板")
 
-# ==================== 媒体处理（只提取每条消息的第一张图片） ====================
+# ==================== 媒体处理（使用 media_group_id 区分每条消息） ====================
 @app.on_message(filters.media & filters.group)
 async def handle_media(client, message: Message):
     global states
@@ -186,30 +186,27 @@ async def handle_media(client, message: Message):
         state["current"] = new_group
         print(f"[DEBUG] 新封面组开始: {title}")
     else:
-        # 带回复的消息 → 检查是否是新的一条消息
+        # 带回复的消息 → 使用 media_group_id 区分每条消息
         if state.get("current"):
-            # 检查是否是新的一条消息（reply_to_message 不同）
-            current_msg = state["current"]["messages"][-1] if state["current"]["messages"] else None
+            media_group_id = getattr(message, 'media_group_id', None)
             
-            if current_msg and message.reply_to_message:
-                if current_msg.reply_to_message and current_msg.reply_to_message.id != message.reply_to_message.id:
+            if media_group_id:
+                # 检查是否是新的一条消息
+                current_group_id = getattr(state["current"]["messages"][-1] if state["current"]["messages"] else None, 'media_group_id', None)
+                
+                if current_group_id != media_group_id:
                     # 新的一条消息 → 只添加第一张图片
-                    if len(state["current"]["messages"]) == 1:
-                        # 第一个消息已经添加了
-                        pass
-                    else:
-                        # 这是新的一条消息，添加第一张图片
-                        state["current"]["messages"].append(message)
-                        print(f"[DEBUG] 新的一条消息，第一张图片: {message.id}")
+                    state["current"]["messages"].append(message)
+                    print(f"[DEBUG] 新的一条消息: {media_group_id}")
                 else:
                     # 同一消息的后续图片，跳过
-                    print(f"[DEBUG] 跳过同一消息的后续图片: {message.id}")
+                    print(f"[DEBUG] 跳过同一消息的后续图片: {media_group_id}")
             else:
-                # 第一个消息
+                # 没有 media_group_id，添加第一张图片
                 state["current"]["messages"].append(message)
                 print(f"[DEBUG] 添加第一张图片: {message.id}")
 
     state["last_time"] = now
 
-print("✅ 版本87 已启动（只提取每条消息的第一张图片）")
+print("✅ 版本88 已启动（使用 media_group_id 区分每条消息）")
 app.run()
