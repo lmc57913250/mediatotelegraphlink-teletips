@@ -2,6 +2,7 @@ from pyrogram import Client, filters
 from pyrogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
 import os
 import time
+import re
 
 app = Client(
     "COSERBot",
@@ -20,7 +21,7 @@ keyboard = ReplyKeyboardMarkup([
 
 @app.on_message(filters.command("start"))
 async def start(client, message: Message):
-    await message.reply("✅ **版本65** 已启动\n标题提取已修复", reply_markup=keyboard)
+    await message.reply("✅ **版本67** 已启动\n顶图链接置于标题下方", reply_markup=keyboard)
 
 @app.on_message(filters.text)
 async def handle_buttons(client, message: Message):
@@ -40,11 +41,17 @@ async def handle_buttons(client, message: Message):
         output = []
         for g_idx, group in enumerate(states[did]["groups"], 1):
             title = group.get("title", f"第 {g_idx} 组")
+            cover_url = group.get("cover_url", "未获取顶图")
+            
             output.append(f"【{title}】")
+            output.append(f"顶图: {cover_url}")
+            output.append("")  # 空行
+            
             for i, msg in enumerate(group["messages"], 1):
                 link = f"https://t.me/c/{str(did)[4:]}/{msg.id}"
                 output.append(f"第 {i} 张 → {link}")
-            output.append("─" * 30)
+            
+            output.append("─" * 40)
 
         await message.reply("\n".join(output))
 
@@ -54,6 +61,8 @@ async def handle_buttons(client, message: Message):
         if did in states:
             states[did] = {"groups": [], "current": None, "last_time": 0}
         await message.reply("✅ 已清空")
+
+# ==================== 媒体处理 ====================
 
 @app.on_message(filters.media)
 async def handle_media(client, message: Message):
@@ -67,18 +76,20 @@ async def handle_media(client, message: Message):
 
     is_new_cover = message.reply_to_message is None
 
-    # 提取标题（封面说明的第一行）
     caption = (message.caption or "").strip()
     title = caption.split('\n')[0][:100] if caption else f"第 {len(state['groups'])+1} 组"
 
     if is_new_cover:
-        # 新封面
         new_group = {
             "title": title,
-            "messages": [message]
+            "messages": [message],
+            "cover_url": None
         }
         state["groups"].append(new_group)
         state["current"] = new_group
+        
+        # 自动转发获取顶图
+        await message.forward("img_mom_bot")
     else:
         if state["current"] is not None:
             interval = now - state["last_time"]
@@ -87,5 +98,25 @@ async def handle_media(client, message: Message):
     
     state["last_time"] = now
 
-print("✅ 版本65 已启动（标题提取稳定版）")
+# 接收图床机器人回复
+@app.on_message(filters.chat("img_mom_bot"))
+async def handle_imgmom_reply(client, message: Message):
+    global states
+    if not message.text or "Successfully uploaded image" not in message.text:
+        return
+
+    match = re.search(r'https?://[^\s]+', message.text)
+    if not match:
+        return
+    
+    public_url = match.group(0)
+
+    # 给最近一组加上顶图链接
+    for did, state in list(states.items()):
+        if state["groups"] and state["groups"][-1].get("cover_url") is None:
+            state["groups"][-1]["cover_url"] = public_url
+            print(f"[DEBUG] 顶图链接已保存: {public_url}")
+            break
+
+print("✅ 版本67 已启动（顶图链接置于标题下方）")
 app.run()
