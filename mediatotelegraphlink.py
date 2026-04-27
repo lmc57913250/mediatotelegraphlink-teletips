@@ -31,7 +31,7 @@ async def start(client, message: Message):
             bot_groups[dialog.chat.id] = dialog.chat.title or f"群组 {dialog.chat.id}"
     
     await message.reply(
-        "✅ **版本91** 已启动\n\n"
+        "✅ **版本92** 已启动\n\n"
         f"已自动刷新群组列表，共找到 {len(bot_groups)} 个群组\n\n"
         "点击「开始新收集」选择群组",
         reply_markup=keyboard
@@ -135,7 +135,7 @@ async def handle_group_select(client, callback):
     )
     await callback.answer()
 
-# ==================== 媒体处理（基于 reply_to_message.id 精确关联） ====================
+# ==================== 媒体处理（修复讨论组相册只提取第一张） ====================
 @app.on_message(filters.media & filters.group)
 async def handle_media(client, message: Message):
     global states
@@ -153,31 +153,25 @@ async def handle_media(client, message: Message):
     title = caption.split('\n')[0][:100] if caption else f"第 {len(state.get('groups', []))+1} 组"
 
     if is_new_cover:
-        # 新封面（可能是相册）
         if has_media_group:
-            # 封面相册 → 检查是否是同一相册
             if state.get("current") and state["current"].get("media_group_id") == message.media_group_id:
-                # 同一相册的后续图片 → 跳过
                 print(f"[DEBUG] 跳过封面相册的后续图片: {message.id}")
             else:
-                # 新封面相册 → 开始新的一组
                 new_group = {
                     "title": title,
                     "messages": [message],
                     "media_group_id": message.media_group_id,
-                    "cover_id": message.id  # 记录封面ID
+                    "cover_id": message.id
                 }
                 if "groups" not in state:
                     state["groups"] = []
                 state["groups"].append(new_group)
                 state["current"] = new_group
-                # 记录封面ID到cover_map
                 if "cover_map" not in state:
                     state["cover_map"] = {}
                 state["cover_map"][message.id] = len(state["groups"]) - 1
                 print(f"[DEBUG] 新封面相册开始: {title}")
         else:
-            # 单个封面图片 → 开始新的一组
             new_group = {
                 "title": title,
                 "messages": [message],
@@ -197,7 +191,6 @@ async def handle_media(client, message: Message):
         if message.reply_to_message:
             reply_id = message.reply_to_message.id
             
-            # 查找对应的封面组
             if "cover_map" in state and reply_id in state["cover_map"]:
                 group_idx = state["cover_map"][reply_id]
                 target_group = state["groups"][group_idx]
@@ -218,5 +211,5 @@ async def handle_media(client, message: Message):
 
     state["last_time"] = now
 
-print("✅ 版本91 已启动（基于 reply_to_message.id 精确关联）")
+print("✅ 版本92 已启动（修复讨论组相册只提取第一张）")
 app.run()
