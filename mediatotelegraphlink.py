@@ -1,5 +1,5 @@
 from pyrogram import Client, filters
-from pyrogram.types import Message
+from pyrogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
 import os
 import time
 
@@ -11,36 +11,72 @@ app = Client(
 )
 
 states = {}
-public_usernames = {}   # discussion_id → public username (如 K4pRI9UlIm0zNjI1)
+
+# 自定义键盘
+keyboard = ReplyKeyboardMarkup([
+    [KeyboardButton("开始新收集")],
+    [KeyboardButton("提取链接")],
+    [KeyboardButton("清空当前")]
+], resize_keyboard=True, one_time_keyboard=False)
 
 @app.on_message(filters.command("start"))
-async def start(client, message):
-    await message.reply("✅ **版本56** 已启动\n自动转换公开链接（适合Telegra.ph）")
+async def start(client, message: Message):
+    await message.reply(
+        "✅ **机器人已就绪**\n\n"
+        "使用下方快捷按钮操作：\n"
+        "• 「开始新收集」→ 开始记录封面和图片\n"
+        "• 「提取链接」→ 提取当前收集的链接\n"
+        "• 「清空当前」→ 重置本次记录",
+        reply_markup=keyboard
+    )
 
-# 自动获取公开用户名
-async def get_public_username(client, discussion_id):
-    if discussion_id in public_usernames:
-        return public_usernames[discussion_id]
-    
-    try:
-        chat = await client.get_chat(discussion_id)
-        if chat.username:
-            public_usernames[discussion_id] = chat.username
-            print(f"[DEBUG] 获取到公开用户名: {chat.username}")
-            return chat.username
-    except:
-        pass
-    return None
+@app.on_message(filters.text)
+async def handle_text_commands(client, message: Message):
+    global states
+    text = message.text.strip()
+    did = message.chat.id
+
+    if text == "开始新收集":
+        if did not in states:
+            states[did] = {"cover": None, "firsts": [], "last_time": 0}
+        states[did]["cover"] = None
+        states[did]["firsts"] = []
+        await message.reply("✅ **已开启新收集**\n请先发送一张封面图")
+        
+    elif text == "提取链接":
+        if did not in states or states[did]["cover"] is None:
+            await message.reply("❌ 当前没有正在收集的内容\n请先点击「开始新收集」")
+            return
+
+        state = states[did]
+        links = []
+        for i, msg in enumerate(state["firsts"]):
+            link = f"https://t.me/c/{str(did)[4:]}/{msg.id}"
+            links.append(link)
+
+        output = "\n".join(links) if links else "暂无链接"
+        await message.reply(f"📸 **提取完成**（共 {len(links)} 组）\n\n{output}")
+
+    elif text == "清空当前":
+        if did in states:
+            states[did] = {"cover": None, "firsts": [], "last_time": 0}
+        await message.reply("✅ 已清空当前收集记录")
+
+    # 处理普通文字（可用于提取标题）
+    elif did in states and states[did]["cover"] is not None and not states[did].get("title_set"):
+        title = text.split('\n')[0].strip()[:100]
+        if title:
+            states[did]["title"] = title
+            states[did]["title_set"] = True
 
 @app.on_message(filters.media)
 async def handle_media(client, message: Message):
     global states
-
     did = message.chat.id
     now = time.time()
 
-    if did not in states:
-        states[did] = {"cover": None, "firsts": [], "last_time": 0}
+    if did not in states or states[did]["cover"] is None:
+        return   # 没开启收集时忽略媒体
 
     state = states[did]
 
@@ -54,33 +90,5 @@ async def handle_media(client, message: Message):
             state["firsts"].append(message)
         state["last_time"] = now
 
-@app.on_message(filters.command("telegraph"))
-async def generate(client, message: Message):
-    global states
-
-    did = message.chat.id
-    if did not in states or states[did]["cover"] is None:
-        return await message.reply("❌ 请先在讨论组发一张封面图")
-
-    state = states[did]
-    
-    # 获取公开用户名
-    public_name = await get_public_username(client, did)
-    
-    links = []
-    for i, msg in enumerate(state["firsts"]):
-        if public_name:
-            link = f"https://t.me/{public_name}/{msg.id}"
-            link_type = "公开链接"
-        else:
-            link = f"https://t.me/c/{str(did)[4:]}/{msg.id}"
-            link_type = "私人链接"
-        links.append(f"第 {i+1} 张 → {link} ({link_type})")
-
-    text = f"📸 **提取完成**（共 {len(links)} 组第一张）\n\n" + "\n".join(links)
-    await message.reply(text)
-
-    states[did] = {"cover": None, "firsts": [], "last_time": 0}
-
-print("✅ 版本56 已启动（自动公开链接）")
+print("✅ 版本58 已启动（底部快捷键盘）")
 app.run()
