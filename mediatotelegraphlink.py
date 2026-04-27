@@ -18,39 +18,58 @@ keyboard = ReplyKeyboardMarkup([
     [KeyboardButton("清空当前")]
 ], resize_keyboard=True)
 
-# ==================== 按钮处理（群组不回复，只私聊） ====================
+# ==================== 所有回复都发到私人窗口 ====================
+async def private_reply(user_id, text):
+    try:
+        await app.send_message(user_id, text)
+    except:
+        pass  # 避免出错
+
+@app.on_message(filters.command("start"))
+async def start(client, message: Message):
+    await private_reply(message.from_user.id, 
+        "✅ **机器人已就绪**（版本67 极致安静版）\n\n"
+        "所有操作结果只会在这里显示\n"
+        "使用下方按钮操作：")
+    await message.reply("已就绪", reply_markup=keyboard)  # 只显示一次键盘
+
+# ==================== 按钮处理 ====================
 @app.on_message(filters.text & filters.group)
 async def handle_buttons(client, message: Message):
     global states
     text = message.text.strip()
     did = message.chat.id
-    user_id = message.from_user.id   # 私聊用户
+    user_id = message.from_user.id
 
     if text == "开始新收集":
-        if did not in states:
-            states[did] = {"groups": [], "current": None, "last_time": 0}
-        states[did]["cover"] = None
-        states[did]["firsts"] = []
-        await client.send_message(user_id, "✅ **已开启新收集**\n请在群组发送封面图")
+        states[did] = {"groups": [], "current": None, "last_time": 0}
+        await private_reply(user_id, "✅ **已开启新收集**\n请在群组发送封面图")
 
     elif text == "提取链接":
-        if did not in states or not states[did]["firsts"]:
-            await client.send_message(user_id, "❌ 当前没有正在收集的内容")
+        if did not in states or not states[did].get("groups"):
+            await private_reply(user_id, "❌ 当前没有正在收集的内容")
             return
 
-        links = [f"https://t.me/c/{str(did)[4:]}/{msg.id}" for msg in states[did]["firsts"]]
-        output = "\n".join(links)
-        await client.send_message(user_id, f"📸 **提取完成**（共 {len(links)} 组）\n\n{output}")
+        output = []
+        for g_idx, group in enumerate(states[did]["groups"], 1):
+            title = group.get("title", f"第 {g_idx} 组")
+            output.append(f"【{title}】")
+            for i, msg in enumerate(group["messages"], 1):
+                link = f"https://t.me/c/{str(did)[4:]}/{msg.id}"
+                output.append(f"第 {i} 张 → {link}")
+            output.append("─" * 40)
 
-        # 提取后自动重置
+        await private_reply(user_id, "\n".join(output))
+
+        # 自动重置
         states[did] = {"groups": [], "current": None, "last_time": 0}
 
     elif text == "清空当前":
         if did in states:
             states[did] = {"groups": [], "current": None, "last_time": 0}
-        await client.send_message(user_id, "✅ 已清空当前记录")
+        await private_reply(user_id, "✅ 已清空当前记录")
 
-# ==================== 媒体处理（静默） ====================
+# ==================== 媒体处理（完全静默） ====================
 @app.on_message(filters.media & filters.group)
 async def handle_media(client, message: Message):
     global states
@@ -81,5 +100,5 @@ async def handle_media(client, message: Message):
 
     state["last_time"] = now
 
-print("✅ 版本66 已启动（静默群组 + 私聊回复）")
+print("✅ 版本67 已启动（极致安静版）")
 app.run()
