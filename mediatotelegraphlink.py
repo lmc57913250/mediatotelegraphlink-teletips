@@ -31,7 +31,7 @@ async def start(client, message: Message):
             bot_groups[dialog.chat.id] = dialog.chat.title or f"群组 {dialog.chat.id}"
     
     await message.reply(
-        "✅ **版本95** 已启动\n\n"
+        "✅ **版本96** 已启动\n\n"
         f"已自动刷新群组列表，共找到 {len(bot_groups)} 个群组\n\n"
         "点击「开始新收集」选择群组",
         reply_markup=keyboard
@@ -99,10 +99,7 @@ async def handle_private(client, message: Message):
             await message.reply("❌ 当前没有正在收集的内容")
             return
 
-        # 方式3：自动提取 + 分组 + 排序
-        groups = states[did]["groups"]
-        
-        for g_idx, group in enumerate(groups, 1):
+        for g_idx, group in enumerate(states[did]["groups"], 1):
             title = group.get("title", f"第 {g_idx} 组")
             clean_title = title.replace("【", "").replace("】", "")
             
@@ -138,7 +135,7 @@ async def handle_group_select(client, callback):
     )
     await callback.answer()
 
-# ==================== 媒体处理（版本90逻辑 + 自动分组） ====================
+# ==================== 媒体处理（基于讨论组） ====================
 @app.on_message(filters.media & filters.group)
 async def handle_media(client, message: Message):
     global states
@@ -210,5 +207,5 @@ async def handle_media(client, message: Message):
 
     state["last_time"] = now
 
-print("✅ 版本95 已启动（方式3：自动提取 + 分组 + 排序）")
+print("✅ 版本96 已启动（基于讨论组提取）")
 app.run()
