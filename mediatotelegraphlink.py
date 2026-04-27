@@ -161,7 +161,7 @@ async def handle_copy_group(client, callback):
     await callback.message.reply(f"📋 已复制内容：\n\n{output.strip()}")
     await callback.answer("✅ 已复制到剪贴板")
 
-# ==================== 媒体处理（使用 media_group_id 区分每条消息） ====================
+# ==================== 媒体处理（使用 media_group_id 分组） ====================
 @app.on_message(filters.media & filters.group)
 async def handle_media(client, message: Message):
     global states
@@ -186,27 +186,32 @@ async def handle_media(client, message: Message):
         state["current"] = new_group
         print(f"[DEBUG] 新封面组开始: {title}")
     else:
-        # 带回复的消息 → 使用 media_group_id 区分每条消息
+        # 带回复的消息 → 使用 media_group_id 判断是否是同一组
         if state.get("current"):
-            media_group_id = getattr(message, 'media_group_id', None)
+            current_msg = state["current"]["messages"][-1] if state["current"]["messages"] else None
             
-            if media_group_id:
-                # 检查是否是新的一条消息
-                current_group_id = getattr(state["current"]["messages"][-1] if state["current"]["messages"] else None, 'media_group_id', None)
-                
-                if current_group_id != media_group_id:
-                    # 新的一条消息 → 只添加第一张图片
-                    state["current"]["messages"].append(message)
-                    print(f"[DEBUG] 新的一条消息: {media_group_id}")
+            if current_msg and current_msg.media_group_id:
+                # 如果当前消息有 media_group_id
+                if message.media_group_id == current_msg.media_group_id:
+                    # 同一相册 → 跳过（只保留第一张）
+                    print(f"[DEBUG] 跳过同一相册的后续图片: {message.id}")
                 else:
-                    # 同一消息的后续图片，跳过
-                    print(f"[DEBUG] 跳过同一消息的后续图片: {media_group_id}")
+                    # 不同相册 → 新的一组
+                    state["current"]["messages"].append(message)
+                    print(f"[DEBUG] 新的一组，第一张图片: {message.id}")
             else:
-                # 没有 media_group_id，添加第一张图片
-                state["current"]["messages"].append(message)
-                print(f"[DEBUG] 添加第一张图片: {message.id}")
+                # 没有 media_group_id → 按 reply_to_message 判断
+                if current_msg and current_msg.reply_to_message:
+                    if message.reply_to_message and current_msg.reply_to_message.id != message.reply_to_message.id:
+                        state["current"]["messages"].append(message)
+                        print(f"[DEBUG] 新的一组，第一张图片: {message.id}")
+                    else:
+                        print(f"[DEBUG] 跳过同一消息的后续图片: {message.id}")
+                else:
+                    state["current"]["messages"].append(message)
+                    print(f"[DEBUG] 添加第一张图片: {message.id}")
 
     state["last_time"] = now
 
-print("✅ 版本88 已启动（使用 media_group_id 区分每条消息）")
+print("✅ 版本88 已启动（使用 media_group_id 分组）")
 app.run()
