@@ -31,7 +31,7 @@ async def start(client, message: Message):
             bot_groups[dialog.chat.id] = dialog.chat.title or f"群组 {dialog.chat.id}"
     
     await message.reply(
-        "✅ **版本86** 已启动\n\n"
+        "✅ **版本87** 已启动\n\n"
         f"已自动刷新群组列表，共找到 {len(bot_groups)} 个群组\n\n"
         "点击「开始新收集」选择群组",
         reply_markup=keyboard
@@ -161,7 +161,7 @@ async def handle_copy_group(client, callback):
     await callback.message.reply(f"📋 已复制内容：\n\n{output.strip()}")
     await callback.answer("✅ 已复制到剪贴板")
 
-# ==================== 媒体处理（封面 + 所有讨论图片 = 一组） ====================
+# ==================== 媒体处理（封面 + 每条第一张 = 一组） ====================
 @app.on_message(filters.media & filters.group)
 async def handle_media(client, message: Message):
     global states
@@ -188,12 +188,15 @@ async def handle_media(client, message: Message):
         state["current"] = new_group
         print(f"[DEBUG] 新封面组开始: {title}")
     else:
-        # 带回复的消息 → 属于当前封面的组
+        # 带回复的消息 → 按每条第一张提取
         if state.get("current"):
-            state["current"]["messages"].append(message)
-            print(f"[DEBUG] 添加到当前组: {message.id}")
+            # 检查是否是当前组的第一张
+            if len(state["current"]["messages"]) == 0 or \
+               (now - state["last_time"] > 0.02):
+                state["current"]["messages"].append(message)
+                print(f"[DEBUG] 添加到当前组: {message.id}")
 
     state["last_time"] = now
 
-print("✅ 版本86 已启动（封面 + 所有讨论图片 = 一组）")
+print("✅ 版本87 已启动（封面 + 每条第一张 = 一组）")
 app.run()
