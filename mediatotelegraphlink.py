@@ -161,7 +161,7 @@ async def handle_copy_group(client, callback):
     await callback.message.reply(f"📋 已复制内容：\n\n{output.strip()}")
     await callback.answer("✅ 已复制到剪贴板")
 
-# ==================== 媒体处理（封面 + 每条第一张 = 一组） ====================
+# ==================== 媒体处理（只提取每条的第一张链接） ====================
 @app.on_message(filters.media & filters.group)
 async def handle_media(client, message: Message):
     global states
@@ -172,31 +172,30 @@ async def handle_media(client, message: Message):
     state = states[did]
     now = time.time()
 
-    # 判断是否是新封面（不带回复的消息）
-    is_new_cover = (message.reply_to_message is None)
+    # 判断是否是新消息条目（不带回复的消息 = 新封面/新条目）
+    is_new_entry = (message.reply_to_message is None)
 
     # 提取标题
     caption = (message.caption or "").strip()
     title = caption.split('\n')[0][:100] if caption else f"第 {len(state.get('groups', []))+1} 组"
 
-    if is_new_cover:
-        # 新封面 → 开始新的一组
+    if is_new_entry:
+        # 新消息条目 → 开始新的一组（只提取第一张）
         new_group = {"title": title, "messages": [message]}
         if "groups" not in state:
             state["groups"] = []
         state["groups"].append(new_group)
         state["current"] = new_group
-        print(f"[DEBUG] 新封面组开始: {title}")
+        print(f"[DEBUG] 新条目组开始: {title}")
     else:
-        # 带回复的消息 → 按每条第一张提取
+        # 带回复的消息 → 属于当前条目的组（只提取第一张）
         if state.get("current"):
-            # 检查是否是当前组的第一张
-            if len(state["current"]["messages"]) == 0 or \
-               (now - state["last_time"] > 0.02):
+            # 只添加第一张（如果当前组还没有添加过）
+            if len(state["current"]["messages"]) == 0:
                 state["current"]["messages"].append(message)
-                print(f"[DEBUG] 添加到当前组: {message.id}")
+            print(f"[DEBUG] 添加到当前组: {message.id}")
 
     state["last_time"] = now
 
-print("✅ 版本87 已启动（封面 + 每条第一张 = 一组）")
+print("✅ 版本87 已启动（只提取每条的第一张链接）")
 app.run()
