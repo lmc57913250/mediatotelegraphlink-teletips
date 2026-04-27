@@ -22,18 +22,16 @@ keyboard = ReplyKeyboardMarkup([
     [KeyboardButton("刷新群组列表")]
 ], resize_keyboard=True)
 
-# ==================== 启动时自动刷新群组列表 ====================
 @app.on_message(filters.command("start"))
 async def start(client, message: Message):
     global bot_groups
-    # 自动刷新群组列表
     bot_groups.clear()
     async for dialog in client.get_dialogs():
         if dialog.chat.type in ["supergroup", "group"]:
             bot_groups[dialog.chat.id] = dialog.chat.title or f"群组 {dialog.chat.id}"
     
     await message.reply(
-        "✅ **版本82** 已启动\n\n"
+        "✅ **版本83** 已启动\n\n"
         f"已自动刷新群组列表，共找到 {len(bot_groups)} 个群组\n\n"
         "点击「开始新收集」选择群组",
         reply_markup=keyboard
@@ -46,7 +44,6 @@ async def handle_private(client, message: Message):
     text = message.text.strip()
     user_id = message.from_user.id
 
-    # 识别群组链接 (t.me/xxx 或 t.me/+xxx)
     if "t.me/" in text:
         try:
             if "/+" in text:
@@ -59,10 +56,9 @@ async def handle_private(client, message: Message):
             await message.reply(f"✅ 已添加群组: {bot_groups[chat.id]}")
             return
         except Exception as e:
-            await message.reply(f"❌ 添加群组失败: {e}\n请直接输入群组ID（以 -100 开头）")
+            await message.reply(f"❌ 添加群组失败: {e}")
             return
 
-    # 识别群组ID（以 -100 开头）
     if text.startswith("-100") and text[1:].isdigit():
         gid = int(text)
         try:
@@ -120,17 +116,24 @@ async def handle_private(client, message: Message):
             states[did] = {"groups": [], "current": None, "last_time": 0}
         await message.reply("✅ 已清空当前记录")
 
-# ==================== 群组选择 ====================
+# ==================== 群组选择（选择后自动开启收集） ====================
 @app.on_callback_query(filters.regex(r"select_group_(-?\d+)"))
 async def handle_group_select(client, callback):
-    global user_current_group
+    global user_current_group, states
     user_id = callback.from_user.id
     group_id = int(callback.data.split("_")[2])
     
     user_current_group[user_id] = group_id
     group_name = bot_groups.get(group_id, f"群组 {group_id}")
     
-    await callback.message.edit_text(f"✅ 已选择群组: {group_name}\n现在可以点击「开始新收集」开始操作")
+    # 自动开启收集模式
+    states[group_id] = {"groups": [], "current": None, "last_time": 0}
+    
+    await callback.message.edit_text(
+        f"✅ 已选择群组: {group_name}\n"
+        f"✅ 已开启新收集模式\n\n"
+        f"请在群组发送封面图"
+    )
     await callback.answer()
 
 # ==================== 媒体处理 ====================
@@ -163,5 +166,5 @@ async def handle_media(client, message: Message):
 
     state["last_time"] = now
 
-print("✅ 版本82 已启动（启动时自动刷新）")
+print("✅ 版本83 已启动（选择后自动开启）")
 app.run()
