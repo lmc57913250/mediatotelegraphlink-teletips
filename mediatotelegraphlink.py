@@ -16,7 +16,6 @@ states = {}
 user_current_group = {}
 bot_groups = {}
 
-# 从文件加载群组列表
 if os.path.exists("bot_groups.json"):
     with open("bot_groups.json", "r", encoding="utf-8") as f:
         bot_groups = json.load(f)
@@ -33,13 +32,12 @@ keyboard = ReplyKeyboardMarkup([
 @app.on_message(filters.command("start"))
 async def start(client, message: Message):
     await message.reply(
-        "✅ **版本101** 已启动\n\n"
+        "✅ **版本102** 已启动\n\n"
         "点击「开始新收集」选择群组\n"
         "如果群组列表为空，请点击「添加群组」并输入群组链接或ID",
         reply_markup=keyboard
     )
 
-# ==================== 添加群组（支持链接和ID） ====================
 @app.on_message(filters.text & filters.private)
 async def handle_private(client, message: Message):
     global states, user_current_group, bot_groups
@@ -50,7 +48,6 @@ async def handle_private(client, message: Message):
         await message.reply("请输入群组链接或ID（以 -100 开头）：")
         return
 
-    # 识别群组链接
     if "t.me/" in text:
         try:
             if "/+" in text:
@@ -60,22 +57,19 @@ async def handle_private(client, message: Message):
                 chat = await client.get_chat(username)
             
             bot_groups[chat.id] = chat.title or f"群组 {chat.id}"
-            # 保存到文件
             with open("bot_groups.json", "w", encoding="utf-8") as f:
                 json.dump(bot_groups, f, ensure_ascii=False, indent=2)
             await message.reply(f"✅ 已添加群组: {bot_groups[chat.id]}")
             return
         except Exception as e:
-            await message.reply(f"❌ 添加群组失败: {e}\n请直接输入群组ID（以 -100 开头）")
+            await message.reply(f"❌ 添加群组失败: {e}")
             return
 
-    # 识别群组ID
     if text.startswith("-100") and text[1:].isdigit():
         gid = int(text)
         try:
             chat = await client.get_chat(gid)
             bot_groups[gid] = chat.title or f"群组 {gid}"
-            # 保存到文件
             with open("bot_groups.json", "w", encoding="utf-8") as f:
                 json.dump(bot_groups, f, ensure_ascii=False, indent=2)
             await message.reply(f"✅ 已添加群组: {bot_groups[gid]}")
@@ -122,7 +116,6 @@ async def handle_private(client, message: Message):
             states[did] = {"groups": [], "current": None, "last_time": 0}
         await message.reply("✅ 已清空当前记录")
 
-# ==================== 群组选择 ====================
 @app.on_callback_query(filters.regex(r"select_group_(-?\d+)"))
 async def handle_group_select(client, callback):
     global user_current_group, states
@@ -141,7 +134,6 @@ async def handle_group_select(client, callback):
     )
     await callback.answer()
 
-# ==================== 媒体处理 ====================
 @app.on_message(filters.media & filters.group)
 async def handle_media(client, message: Message):
     global states
@@ -212,5 +204,5 @@ async def handle_media(client, message: Message):
 
     state["last_time"] = now
 
-print("✅ 版本101 已启动（记住群组）")
+print("✅ 版本102 已启动（只提取第一张图片）")
 app.run()
