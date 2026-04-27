@@ -18,91 +18,68 @@ keyboard = ReplyKeyboardMarkup([
     [KeyboardButton("清空当前")]
 ], resize_keyboard=True)
 
-@app.on_message(filters.command("start"))
-async def start(client, message: Message):
-    await message.reply(
-        "✅ **版本69** 已启动\n"
-        "• 正常使用：点击「开始新收集」\n"
-        "• 提取旧封面：回复旧封面消息 + 发送 /collect",
-        reply_markup=keyboard
-    )
-
-# ==================== 按钮处理 ====================
-@app.on_message(filters.text)
+# ==================== 按钮处理（群组不回复，只私聊） ====================
+@app.on_message(filters.text & filters.group)
 async def handle_buttons(client, message: Message):
     global states
     text = message.text.strip()
     did = message.chat.id
+    user_id = message.from_user.id   # 私聊用户
 
     if text == "开始新收集":
-        states[did] = {"groups": [], "current": None, "last_time": 0}
-        await message.reply("✅ 已开启新收集模式")
+        if did not in states:
+            states[did] = {"groups": [], "current": None, "last_time": 0}
+        states[did]["cover"] = None
+        states[did]["firsts"] = []
+        await client.send_message(user_id, "✅ **已开启新收集**\n请在群组发送封面图")
 
     elif text == "提取链接":
-        if did not in states or not states[did]["groups"]:
-            await message.reply("❌ 当前没有内容")
+        if did not in states or not states[did]["firsts"]:
+            await client.send_message(user_id, "❌ 当前没有正在收集的内容")
             return
-        # 输出逻辑（保持之前清晰格式）
-        output = []
-        for g_idx, group in enumerate(states[did]["groups"], 1):
-            title = group.get("title", f"第 {g_idx} 组")
-            output.append(f"【{title}】")
-            for i, msg in enumerate(group["messages"], 1):
-                link = f"https://t.me/c/{str(did)[4:]}/{msg.id}"
-                output.append(f"第 {i} 张 → {link}")
-            output.append("─" * 40)
-        await message.reply("\n".join(output))
+
+        links = [f"https://t.me/c/{str(did)[4:]}/{msg.id}" for msg in states[did]["firsts"]]
+        output = "\n".join(links)
+        await client.send_message(user_id, f"📸 **提取完成**（共 {len(links)} 组）\n\n{output}")
+
+        # 提取后自动重置
         states[did] = {"groups": [], "current": None, "last_time": 0}
 
     elif text == "清空当前":
         if did in states:
             states[did] = {"groups": [], "current": None, "last_time": 0}
-        await message.reply("✅ 已清空")
+        await client.send_message(user_id, "✅ 已清空当前记录")
 
-# ==================== 新功能：回复旧封面 + /collect ====================
-@app.on_message(filters.command("collect"))
-async def collect_from_reply(client, message: Message):
-    global states
-    did = message.chat.id
-
-    if not message.reply_to_message:
-        await message.reply("❌ 请**回复**你要提取的封面消息，然后发送 /collect")
-        return
-
-    cover_msg = message.reply_to_message
-
-    if did not in states:
-        states[did] = {"groups": [], "current": None, "last_time": 0}
-
-    # 提取标题
-    caption = (cover_msg.caption or cover_msg.text or "").strip()
-    title = caption.split('\n')[0][:100] if caption else "未设置标题"
-
-    # 创建新组
-    new_group = {
-        "title": title,
-        "messages": [cover_msg]
-    }
-    states[did]["groups"].append(new_group)
-    states[did]["current"] = new_group
-
-    await message.reply(f"✅ 已开始收集此封面下的回复\n标题：{title}\n正在等待你发图片...")
-
-# ==================== 普通媒体收集（自动模式） ====================
-@app.on_message(filters.media)
+# ==================== 媒体处理（静默） ====================
+@app.on_message(filters.media & filters.group)
 async def handle_media(client, message: Message):
     global states
     did = message.chat.id
-    if did not in states or states[did]["current"] is None:
+    if did not in states:
         return
 
     state = states[did]
     now = time.time()
 
-    if now - state["last_time"] > 0.02:
-        state["current"]["messages"].append(message)
+    is_new_cover = (message.reply_to_message is None)
+
+    # 提取标题
+    caption = (message.caption or "").strip()
+    title = caption.split('\n')[0][:100] if caption else f"第 {len(state.get('groups', []))+1} 组"
+
+    if is_new_cover:
+        new_group = {"title": title, "messages": [message]}
+        if "groups" not in state:
+            state["groups"] = []
+        state["groups"].append(new_group)
+        state["current"] = new_group
+    else:
+        if state.get("current"):
+            interval = now - state.get("last_time", 0)
+            if interval > 0.02:
+                state["current"]["messages"].append(message)
 
     state["last_time"] = now
 
-print("✅ 版本69 已启动（支持回复旧封面提取）")
+print("✅ 版本66 已启动（静默群组 + 私聊回复）")
 app.run()
