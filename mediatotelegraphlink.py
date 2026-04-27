@@ -2,6 +2,7 @@ from pyrogram import Client, filters
 from pyrogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 import os
 import json
+import re
 
 app = Client(
     "COSERBot",
@@ -14,12 +15,10 @@ states = {}
 user_current_group = {}
 bot_groups = {}
 
-# 读取群组
 if os.path.exists("bot_groups.json"):
     with open("bot_groups.json", "r", encoding="utf-8") as f:
         bot_groups = json.load(f)
 
-# 主菜单
 keyboard = ReplyKeyboardMarkup([
     [KeyboardButton("开始新收集")],
     [KeyboardButton("提取链接")],
@@ -27,29 +26,112 @@ keyboard = ReplyKeyboardMarkup([
     [KeyboardButton("添加群组")]
 ], resize_keyboard=True)
 
-# 启动
 @app.on_message(filters.command("start"))
 async def start(client, message: Message):
     await message.reply(
-        "✅ **版本108（自动公开链接版）** 已启动\n\n"
+        "✅ **版本109（线程提取版）** 已启动\n\n"
         "✔ 相册只取第一张\n"
-        "✔ 自动识别公开群链接\n\n"
-        "点击「开始新收集」选择群组",
+        "✔ 自动公开链接\n"
+        "✔ 支持线程提取（直接发链接）",
         reply_markup=keyboard
     )
 
-# 私聊
+# =========================
+# ⭐ 私聊处理
+# =========================
 @app.on_message(filters.text & filters.private)
 async def handle_private(client, message: Message):
     global states, user_current_group, bot_groups
     text = message.text.strip()
     user_id = message.from_user.id
 
+    # =========================
+    # ⭐ 线程提取（新功能）
+    # =========================
+    if text.startswith("http"):
+        await message.reply("⏳ 正在提取线程...")
+
+        try:
+            match = re.search(r"t\.me/(.+?)/(\d+)", text)
+            if not match:
+                await message.reply("❌ 链接格式错误")
+                return
+
+            chat_input = match.group(1)
+            msg_id = int(match.group(2))
+
+            if chat_input.startswith("c/"):
+                chat_id = int("-100" + chat_input.split("/")[1])
+            else:
+                chat = await client.get_chat(chat_input)
+                chat_id = chat.id
+
+            chat = await client.get_chat(chat_id)
+
+            root_msg = await client.get_messages(chat_id, msg_id)
+
+            # 收集回复
+            replies = []
+            async for msg in client.search_messages(chat_id, reply_to_message_id=msg_id):
+                replies.append(msg)
+
+            replies.sort(key=lambda x: x.id)
+
+            # =========================
+            # ⭐ 按你的规则处理
+            # =========================
+            result_msgs = []
+            processed_albums = set()
+
+            # 封面
+            if root_msg.media:
+                result_msgs.append(root_msg)
+
+            # 回复
+            for msg in replies:
+
+                # 只处理媒体
+                if not msg.media:
+                    continue
+
+                # 相册只取第一张
+                if msg.media_group_id:
+                    if msg.media_group_id in processed_albums:
+                        continue
+                    processed_albums.add(msg.media_group_id)
+                    result_msgs.append(msg)
+                else:
+                    result_msgs.append(msg)
+
+            # =========================
+            # 输出
+            # =========================
+            output = f"线程提取（共 {len(result_msgs)} 张）\n"
+
+            for i, msg in enumerate(result_msgs, 1):
+
+                if chat.username:
+                    link = f"https://t.me/{chat.username}/{msg.id}"
+                else:
+                    link = f"https://t.me/c/{str(chat_id)[4:]}/{msg.id}"
+
+                output += f"第 {i} 张 → {link}\n"
+
+            await message.reply(output)
+
+        except Exception as e:
+            await message.reply(f"❌ 提取失败: {e}")
+
+        return
+
+    # =========================
+    # 原有功能（不变）
+    # =========================
+
     if text == "添加群组":
         await message.reply("请输入群组链接或ID（-100开头）：")
         return
 
-    # 添加群组（链接）
     if "t.me/" in text:
         try:
             if "/+" in text:
@@ -68,7 +150,6 @@ async def handle_private(client, message: Message):
             await message.reply(f"❌ 添加失败: {e}")
         return
 
-    # 添加群组（ID）
     if text.startswith("-100") and text[1:].isdigit():
         gid = int(text)
         try:
@@ -83,7 +164,6 @@ async def handle_private(client, message: Message):
             await message.reply(f"❌ 添加失败: {e}")
         return
 
-    # 开始收集
     if text == "开始新收集":
         if not bot_groups:
             await message.reply("❌ 请先添加群组")
@@ -96,7 +176,6 @@ async def handle_private(client, message: Message):
         await message.reply("请选择群组：", reply_markup=InlineKeyboardMarkup(buttons))
         return
 
-    # 提取链接（⭐ 已改：自动公开链接）
     if text == "提取链接":
         did = user_current_group.get(user_id)
 
@@ -104,7 +183,7 @@ async def handle_private(client, message: Message):
             await message.reply("❌ 没有数据")
             return
 
-        chat = await client.get_chat(did)  # ⭐ 只获取一次
+        chat = await client.get_chat(did)
 
         for g_idx, group in enumerate(states[did]["groups"], 1):
             title = group.get("title", f"第 {g_idx} 组")
@@ -113,24 +192,23 @@ async def handle_private(client, message: Message):
             for i, msg in enumerate(group["messages"], 1):
 
                 if chat.username:
-                    # ✅ 公开群 / 频道
                     link = f"https://t.me/{chat.username}/{msg.id}"
                 else:
-                    # ⚠️ 私密群兜底
                     link = f"https://t.me/c/{str(did)[4:]}/{msg.id}"
 
                 output += f"第 {i} 张 → {link}\n"
 
             await message.reply(output.strip())
 
-    # 清空
     elif text == "清空当前":
         did = user_current_group.get(user_id)
         if did:
             states[did] = {"groups": [], "cover_map": {}, "processed_albums": set()}
         await message.reply("✅ 已清空")
 
-# 选择群组
+# =========================
+# 群选择
+# =========================
 @app.on_callback_query(filters.regex(r"select_group_(-?\d+)"))
 async def handle_group_select(client, callback):
     user_id = callback.from_user.id
@@ -148,7 +226,7 @@ async def handle_group_select(client, callback):
     await callback.answer()
 
 # =========================
-# ⭐ 核心：相册只取第一张
+# ⭐ 收集逻辑（相册只取第一张）
 # =========================
 @app.on_message(filters.media & filters.group)
 async def handle_media(client, message: Message):
@@ -162,7 +240,6 @@ async def handle_media(client, message: Message):
     caption = (message.caption or "").strip()
     title = caption.split('\n')[0][:100] if caption else f"第 {len(state['groups'])+1} 组"
 
-    # ===== 相册 =====
     if message.media_group_id:
         gid = message.media_group_id
 
@@ -171,28 +248,25 @@ async def handle_media(client, message: Message):
 
         state["processed_albums"].add(gid)
 
-        first_msg = message
-
-        if not first_msg.reply_to_message:
+        if not message.reply_to_message:
             new_group = {
                 "title": title,
-                "messages": [first_msg],
-                "cover_id": first_msg.id
+                "messages": [message],
+                "cover_id": message.id
             }
 
             state["groups"].append(new_group)
-            state["cover_map"][first_msg.id] = len(state["groups"]) - 1
+            state["cover_map"][message.id] = len(state["groups"]) - 1
 
         else:
-            reply_id = first_msg.reply_to_message.id
+            reply_id = message.reply_to_message.id
 
             if reply_id in state["cover_map"]:
                 idx = state["cover_map"][reply_id]
-                state["groups"][idx]["messages"].append(first_msg)
+                state["groups"][idx]["messages"].append(message)
 
         return
 
-    # ===== 单图 =====
     if not message.reply_to_message:
         new_group = {
             "title": title,
@@ -210,5 +284,5 @@ async def handle_media(client, message: Message):
         idx = state["cover_map"][reply_id]
         state["groups"][idx]["messages"].append(message)
 
-print("✅ 版本108 已启动（自动公开链接 + 相册首图）")
+print("✅ 版本109 已启动（线程+相册首图）")
 app.run()
