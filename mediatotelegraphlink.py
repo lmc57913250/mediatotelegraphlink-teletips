@@ -32,7 +32,7 @@ keyboard = ReplyKeyboardMarkup([
 @app.on_message(filters.command("start"))
 async def start(client, message: Message):
     await message.reply(
-        "✅ **版本103** 已启动\n\n"
+        "✅ **版本104** 已启动\n\n"
         "点击「开始新收集」选择群组\n"
         "如果群组列表为空，请点击「添加群组」并输入群组链接或ID",
         reply_markup=keyboard
@@ -145,46 +145,28 @@ async def handle_media(client, message: Message):
     now = time.time()
 
     is_new_cover = (message.reply_to_message is None)
-    has_media_group = message.media_group_id is not None
 
     caption = (message.caption or "").strip()
     title = caption.split('\n')[0][:100] if caption else f"第 {len(state.get('groups', []))+1} 组"
 
     if is_new_cover:
-        if has_media_group:
-            if state.get("current") and state["current"].get("media_group_id") == message.media_group_id:
-                print(f"[DEBUG] 跳过封面相册的后续图片: {message.id}")
-            else:
-                new_group = {
-                    "title": title,
-                    "messages": [message],
-                    "media_group_id": message.media_group_id,
-                    "cover_id": message.id
-                }
-                if "groups" not in state:
-                    state["groups"] = []
-                state["groups"].append(new_group)
-                state["current"] = new_group
-                if "cover_map" not in state:
-                    state["cover_map"] = {}
-                state["cover_map"][message.id] = len(state["groups"]) - 1
-                print(f"[DEBUG] 新封面相册开始: {title}")
-        else:
-            new_group = {
-                "title": title,
-                "messages": [message],
-                "media_group_id": None,
-                "cover_id": message.id
-            }
-            if "groups" not in state:
-                state["groups"] = []
-            state["groups"].append(new_group)
-            state["current"] = new_group
-            if "cover_map" not in state:
-                state["cover_map"] = {}
-            state["cover_map"][message.id] = len(state["groups"]) - 1
-            print(f"[DEBUG] 新封面图片开始: {title}")
+        # 新封面
+        new_group = {
+            "title": title,
+            "messages": [message],
+            "cover_id": message.id,
+            "last_time": now
+        }
+        if "groups" not in state:
+            state["groups"] = []
+        state["groups"].append(new_group)
+        state["current"] = new_group
+        if "cover_map" not in state:
+            state["cover_map"] = {}
+        state["cover_map"][message.id] = len(state["groups"]) - 1
+        print(f"[DEBUG] 新封面开始: {title}")
     else:
+        # 带回复的消息 → 讨论组
         if message.reply_to_message:
             reply_id = message.reply_to_message.id
             
@@ -192,26 +174,28 @@ async def handle_media(client, message: Message):
                 group_idx = state["cover_map"][reply_id]
                 target_group = state["groups"][group_idx]
                 
-                if target_group.get("media_group_id") is not None and message.media_group_id is not None:
-                    if message.media_group_id == target_group["media_group_id"]:
+                # 检查是否是同一相册（通过时间间隔）
+                interval = now - target_group.get("last_time", 0)
+                if interval < 0.02:
+                    # 同一相册 → 跳过
+                    print(f"[DEBUG] 跳过讨论组相册的后续图片: {message.id}")
+                else:
+                    # 不同相册 → 添加
+                    target_group["messages"].append(message)
+                    target_group["last_time"] = now
+                    print(f"[DEBUG] 添加到封面 {reply_id} 的组: {message.id}")
+            else:
+                # 没有找到对应的封面 → 添加到当前组（兜底）
+                if state.get("current"):
+                    interval = now - state["current"].get("last_time", 0)
+                    if interval < 0.02:
                         print(f"[DEBUG] 跳过讨论组相册的后续图片: {message.id}")
                     else:
-                        target_group["messages"].append(message)
-                        print(f"[DEBUG] 添加到封面 {reply_id} 的组: {message.id}")
-                else:
-                    if target_group.get("cover_id") == reply_id:
-                        target_group["messages"].append(message)
-                        print(f"[DEBUG] 添加到封面 {reply_id} 的组: {message.id}")
-                    else:
-                        if state.get("current"):
-                            state["current"]["messages"].append(message)
-                            print(f"[DEBUG] 兜底添加到当前组: {message.id}")
-            else:
-                if state.get("current"):
-                    state["current"]["messages"].append(message)
-                    print(f"[DEBUG] 兜底添加到当前组: {message.id}")
+                        state["current"]["messages"].append(message)
+                        state["current"]["last_time"] = now
+                        print(f"[DEBUG] 添加到当前组: {message.id}")
 
     state["last_time"] = now
 
-print("✅ 版本103 已启动（严格检查 media_group_id）")
+print("✅ 版本104 已启动（reply_to_message.id + 时间间隔）")
 app.run()
