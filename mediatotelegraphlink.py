@@ -20,7 +20,7 @@ keyboard = ReplyKeyboardMarkup([
 
 @app.on_message(filters.command("start"))
 async def start(client, message: Message):
-    await message.reply("✅ **版本63** 已启动\n支持封面说明提取标题", reply_markup=keyboard)
+    await message.reply("✅ **版本65** 已启动\n标题提取已修复", reply_markup=keyboard)
 
 @app.on_message(filters.text)
 async def handle_buttons(client, message: Message):
@@ -39,9 +39,9 @@ async def handle_buttons(client, message: Message):
 
         output = []
         for g_idx, group in enumerate(states[did]["groups"], 1):
-            title = group[0].get("title", f"第 {g_idx} 组")
+            title = group.get("title", f"第 {g_idx} 组")
             output.append(f"【{title}】")
-            for i, msg in enumerate(group, 1):
+            for i, msg in enumerate(group["messages"], 1):
                 link = f"https://t.me/c/{str(did)[4:]}/{msg.id}"
                 output.append(f"第 {i} 张 → {link}")
             output.append("─" * 30)
@@ -65,27 +65,27 @@ async def handle_media(client, message: Message):
     state = states[did]
     now = time.time()
 
-    # 判断是否是新封面（不带回复的消息）
     is_new_cover = message.reply_to_message is None
 
-    # 提取标题（如果有说明文字）
-    caption = message.caption or ""
-    title = caption.split('\n')[0].strip()[:80] if caption else f"第 {len(state['groups'])+1} 组"
+    # 提取标题（封面说明的第一行）
+    caption = (message.caption or "").strip()
+    title = caption.split('\n')[0][:100] if caption else f"第 {len(state['groups'])+1} 组"
 
     if is_new_cover:
         # 新封面
-        new_group = [message]
-        new_group[0].title = title   # 给消息对象临时加标题
+        new_group = {
+            "title": title,
+            "messages": [message]
+        }
         state["groups"].append(new_group)
         state["current"] = new_group
     else:
-        # 当前组的图片
         if state["current"] is not None:
             interval = now - state["last_time"]
             if interval > 0.02:
-                state["current"].append(message)
+                state["current"]["messages"].append(message)
     
     state["last_time"] = now
 
-print("✅ 版本63 已启动（封面说明提取标题）")
+print("✅ 版本65 已启动（标题提取稳定版）")
 app.run()
