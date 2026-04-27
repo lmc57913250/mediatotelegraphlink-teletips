@@ -31,7 +31,7 @@ async def start(client, message: Message):
             bot_groups[dialog.chat.id] = dialog.chat.title or f"群组 {dialog.chat.id}"
     
     await message.reply(
-        "✅ **版本83** 已启动\n\n"
+        "✅ **版本87** 已启动\n\n"
         f"已自动刷新群组列表，共找到 {len(bot_groups)} 个群组\n\n"
         "点击「开始新收集」选择群组",
         reply_markup=keyboard
@@ -99,16 +99,20 @@ async def handle_private(client, message: Message):
             await message.reply("❌ 当前没有正在收集的内容")
             return
 
-        output = []
         for g_idx, group in enumerate(states[did]["groups"], 1):
             title = group.get("title", f"第 {g_idx} 组")
-            output.append(f"【{title}】")
+            clean_title = title.replace("【", "").replace("】", "")
+            
+            output = f"{clean_title}\n"
             for i, msg in enumerate(group["messages"], 1):
                 link = f"https://t.me/c/{str(did)[4:]}/{msg.id}"
-                output.append(f"第 {i} 张 → {link}")
-            output.append("─" * 40)
-
-        await message.reply("\n".join(output))
+                output += f"第 {i} 张 → {link}\n"
+            
+            copy_keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton("📋 复制本组", callback_data=f"copy_group_{did}_{g_idx-1}")]
+            ])
+            
+            await message.reply(output.strip(), reply_markup=copy_keyboard)
 
     elif text == "清空当前":
         did = user_current_group.get(user_id)
@@ -116,7 +120,7 @@ async def handle_private(client, message: Message):
             states[did] = {"groups": [], "current": None, "last_time": 0}
         await message.reply("✅ 已清空当前记录")
 
-# ==================== 群组选择（选择后自动开启收集） ====================
+# ==================== 群组选择 ====================
 @app.on_callback_query(filters.regex(r"select_group_(-?\d+)"))
 async def handle_group_select(client, callback):
     global user_current_group, states
@@ -126,7 +130,6 @@ async def handle_group_select(client, callback):
     user_current_group[user_id] = group_id
     group_name = bot_groups.get(group_id, f"群组 {group_id}")
     
-    # 自动开启收集模式
     states[group_id] = {"groups": [], "current": None, "last_time": 0}
     
     await callback.message.edit_text(
@@ -136,7 +139,29 @@ async def handle_group_select(client, callback):
     )
     await callback.answer()
 
-# ==================== 媒体处理 ====================
+# ==================== 一键复制功能 ====================
+@app.on_callback_query(filters.regex(r"copy_group_(-?\d+)_(\d+)"))
+async def handle_copy_group(client, callback):
+    did = int(callback.data.split("_")[2])
+    group_idx = int(callback.data.split("_")[3])
+    
+    if did not in states or group_idx >= len(states[did].get("groups", [])):
+        await callback.answer("❌ 内容已过期，请重新提取", show_alert=True)
+        return
+    
+    group = states[did]["groups"][group_idx]
+    title = group.get("title", f"第 {group_idx+1} 组")
+    clean_title = title.replace("【", "").replace("】", "")
+    
+    output = f"{clean_title}\n"
+    for i, msg in enumerate(group["messages"], 1):
+        link = f"https://t.me/c/{str(did)[4:]}/{msg.id}"
+        output += f"第 {i} 张 → {link}\n"
+    
+    await callback.message.reply(f"📋 已复制内容：\n\n{output.strip()}")
+    await callback.answer("✅ 已复制到剪贴板")
+
+# ==================== 媒体处理（只提取每条消息的第一张图片） ====================
 @app.on_message(filters.media & filters.group)
 async def handle_media(client, message: Message):
     global states
@@ -153,18 +178,38 @@ async def handle_media(client, message: Message):
     title = caption.split('\n')[0][:100] if caption else f"第 {len(state.get('groups', []))+1} 组"
 
     if is_new_cover:
+        # 新封面 → 开始新的一组
         new_group = {"title": title, "messages": [message]}
         if "groups" not in state:
             state["groups"] = []
         state["groups"].append(new_group)
         state["current"] = new_group
+        print(f"[DEBUG] 新封面组开始: {title}")
     else:
+        # 带回复的消息 → 检查是否是新的一条消息
         if state.get("current"):
-            interval = now - state.get("last_time", 0)
-            if interval > 0.02:
+            # 检查是否是新的一条消息（reply_to_message 不同）
+            current_msg = state["current"]["messages"][-1] if state["current"]["messages"] else None
+            
+            if current_msg and message.reply_to_message:
+                if current_msg.reply_to_message and current_msg.reply_to_message.id != message.reply_to_message.id:
+                    # 新的一条消息 → 只添加第一张图片
+                    if len(state["current"]["messages"]) == 1:
+                        # 第一个消息已经添加了
+                        pass
+                    else:
+                        # 这是新的一条消息，添加第一张图片
+                        state["current"]["messages"].append(message)
+                        print(f"[DEBUG] 新的一条消息，第一张图片: {message.id}")
+                else:
+                    # 同一消息的后续图片，跳过
+                    print(f"[DEBUG] 跳过同一消息的后续图片: {message.id}")
+            else:
+                # 第一个消息
                 state["current"]["messages"].append(message)
+                print(f"[DEBUG] 添加第一张图片: {message.id}")
 
     state["last_time"] = now
 
-print("✅ 版本83 已启动（选择后自动开启）")
+print("✅ 版本87 已启动（只提取每条消息的第一张图片）")
 app.run()
