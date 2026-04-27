@@ -24,11 +24,18 @@ keyboard = ReplyKeyboardMarkup([
 @app.on_message(filters.command("start"))
 async def start(client, message: Message):
     await message.reply(
-        "✅ **版本78** 已启动\n\n"
+        "✅ **版本80** 已启动\n\n"
         "点击「开始新收集」选择群组\n"
         "如果群组列表为空，请点击「刷新群组列表」",
         reply_markup=keyboard
     )
+
+# ==================== @机器人时回复 ====================
+@app.on_message(filters.mentioned & filters.group)
+async def on_mentioned(client, message: Message):
+    chat = message.chat
+    bot_groups[chat.id] = chat.title or f"群组 {chat.id}"
+    await message.reply("✅ 机器人已就绪\n群组已记录，现在可以在私信操作了")
 
 # ==================== 刷新群组列表 ====================
 @app.on_message(filters.text & filters.private)
@@ -47,7 +54,7 @@ async def handle_private(client, message: Message):
 
     if text == "开始新收集":
         if not bot_groups:
-            await message.reply("❌ 机器人还没有加入任何群组\n请点击「刷新群组列表」")
+            await message.reply("❌ 机器人还没有加入任何群组\n请点击「刷新群组列表」\n或者直接输入群组ID（以 -100 开头）")
             return
         
         keyboard = []
@@ -55,6 +62,17 @@ async def handle_private(client, message: Message):
             keyboard.append([InlineKeyboardButton(gname, callback_data=f"select_group_{gid}")])
         
         await message.reply("请选择要操作的群组：", reply_markup=InlineKeyboardMarkup(keyboard))
+        return
+
+    # 如果用户输入群组ID（以 -100 开头）
+    if text.startswith("-100") and text[1:].isdigit():
+        gid = int(text)
+        try:
+            chat = await client.get_chat(gid)
+            bot_groups[gid] = chat.title or f"群组 {gid}"
+            await message.reply(f"✅ 已添加群组: {bot_groups[gid]}")
+        except Exception as e:
+            await message.reply(f"❌ 添加群组失败: {e}")
         return
 
     if text == "提取链接":
@@ -127,5 +145,5 @@ async def handle_media(client, message: Message):
 
     state["last_time"] = now
 
-print("✅ 版本78 已启动（刷新群组列表）")
+print("✅ 版本80 已启动（@机器人自动记录）")
 app.run()
